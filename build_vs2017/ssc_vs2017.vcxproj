@@ -63,6 +63,7 @@
     <ClCompile Include="..\ssc\cmod_swh.cpp" />
     <ClCompile Include="..\ssc\cmod_tcsdirect_steam.cpp" />
     <ClCompile Include="..\ssc\cmod_tcsdish.cpp" />
+    <ClCompile Include="..\ssc\cmod_tcsgen3gas.cpp" />
     <ClCompile Include="..\ssc\cmod_tcsgeneric_solar.cpp" />
     <ClCompile Include="..\ssc\cmod_tcsiscc.cpp" />
     <ClCompile Include="..\ssc\cmod_tcslinear_fresnel.cpp" />
