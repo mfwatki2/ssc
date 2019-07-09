@@ -66,7 +66,7 @@ private:
 	double m_id_tube;
 	double m_A_tube;
 	int m_n_t;
-	double m_A_rec_proj;
+	int m_n_lines;		//number of collection headers supplying main downcomer
 	double m_A_node;
 	
 	double m_Q_dot_piping_loss;		//[Wt] = Constant thermal losses from piping to env. = (THT*length_mult + length_add) * piping_loss_coef
@@ -86,9 +86,6 @@ private:
 	double m_t_su;
 	double m_t_su_prev;
 
-	util::matrix_t<int> m_flow_pattern;
-	int m_n_lines;
-
 	util::matrix_t<double> m_flux_in;
 
 	util::matrix_t<double> m_q_dot_inc;
@@ -97,8 +94,6 @@ private:
 	util::matrix_t<double> m_T_s;
 	util::matrix_t<double> m_T_panel_out_guess;
 	util::matrix_t<double> m_T_panel_out;
-	util::matrix_t<double> m_T_panel_in_guess;
-	util::matrix_t<double> m_T_panel_in;
 	util::matrix_t<double> m_T_panel_ave;
 	util::matrix_t<double> m_T_panel_ave_guess;
 	util::matrix_t<double> m_T_film;
@@ -111,13 +106,6 @@ private:
 	double m_LoverD;
 	double m_RelRough;
 
-	// ISCC-specific
-	double m_T_amb_low;
-	double m_T_amb_high;
-	double m_P_amb_low;
-	double m_P_amb_high;
-	double m_q_iscc_max;
-
 	// member string for exception messages
 	std::string error_msg;
 
@@ -129,21 +117,20 @@ public:
 	C_csp_messages csp_messages;
 
 	// Data
-	int m_n_panels;					//[-]
-	double m_d_rec;					//[m]
+	double m_w_rec;					//[m]
 	double m_h_rec;					//[m]
 	double m_h_tower;				//[m]
 	double m_od_tube;				//[mm], convert to [m] in init()
 	double m_th_tube;				//[mm], convert to [m] in init()
 	double m_epsilon;				//[-]
 	double m_hl_ffact;				//[-]
-	double m_T_htf_hot_des;			//[C], convert to [K] in init()
-	double m_T_htf_cold_des;		//[C], convert to [K] in init()
+	double m_T_hot_des;			//[C], convert to [K] in init()
+	double m_T_cold_des;		//[C], convert to [K] in init()
 	double m_f_rec_min;				//[-]
 	double m_q_rec_des;				//[MW], convert to [W] in init()
 	double m_rec_su_delay;			//[-]
 	double m_rec_qf_delay;			//[-]
-	double m_m_dot_htf_max_frac;	//[-]
+	double m_m_dot_max_frac;	//[-]
 	double m_A_sf;					//[m2]
 
 	// 8.10.2015 twn: add tower piping thermal losses to receiver performance
@@ -154,31 +141,17 @@ public:
 	// 7.13.17 twn: keep this public for now so iscc can calculate
 	double m_m_dot_htf_max;			//[kg/s]
 
-
 	int m_n_flux_x;
 	int m_n_flux_y;
 
 	// Calculate in init()
 	double m_q_dot_inc_min;			//[Wt]
-	// double m_q_rec_min;				//[W]
-
-		// 4.17.15 twn: former TCS inputs, moved to member data because are constant throughout simulation
-	double m_T_salt_hot_target;			//[C], convert to K in init() call
-	double m_eta_pump;					//[-]
-	int m_night_recirc;					//[-]
+	double m_T_out_target;			//[C], convert to K in init() call
 	double m_hel_stow_deploy;			//[-]
 
-		// Added for csp_solver/tcs wrappers:
-	int m_field_fl;
 	util::matrix_t<double> m_field_fl_props;	
 	int m_mat_tube;
-	int m_flow_type;
-    int m_crossover_shift;
 
-		// ISCC specific
-	//bool m_is_iscc;
-	//int m_cycle_config;
-	
 	struct S_inputs
 	{
 		double m_field_eff;					//[-] 
@@ -252,7 +225,7 @@ public:
 
 	void converged();
 
-    void calc_pump_performance(double rho_f, double mdot, double ffact, double &PresDrop_calc, double &WdotPump_calc);
+    void calc_receiver_presdrop(double rho_f, double mdot, double ffact, double &PresDrop_calc);
 
     HTFProperties *get_htf_property_object();
 
