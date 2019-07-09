@@ -223,22 +223,6 @@ static C_csp_reported_outputs::S_output_info S_solver_output_info[] =
 	{C_csp_solver_gas::C_solver_outputs::CTRL_OP_MODE_SEQ_A, C_csp_reported_outputs::TS_1ST},		  //[-] First 3 operating modes tried
 	{C_csp_solver_gas::C_solver_outputs::CTRL_OP_MODE_SEQ_B, C_csp_reported_outputs::TS_1ST},		  //[-] Next 3 operating modes tried
 	{C_csp_solver_gas::C_solver_outputs::CTRL_OP_MODE_SEQ_C, C_csp_reported_outputs::TS_1ST},		  //[-] Final 3 operating modes tried
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_SOLVE_STATE, C_csp_reported_outputs::TS_1ST},		  //[-] The status of the dispatch optimization solver
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_SOLVE_ITER, C_csp_reported_outputs::TS_1ST},		  //[-] Number of iterations before completing dispatch optimization
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_SOLVE_OBJ, C_csp_reported_outputs::TS_1ST},		  //[?] Objective function value achieved by the dispatch optimization solver
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_SOLVE_OBJ_RELAX, C_csp_reported_outputs::TS_1ST},	  //[?] Objective function value for the relaxed continuous problem 
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_QSF_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[MWt] Expected total solar field energy generation in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_QSFPROD_EXPECT, C_csp_reported_outputs::TS_1ST},	  //[MWt] Expected useful solar field energy generation in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_QSFSU_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[MWt] Solar field startup energy in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_TES_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[MWht] Thermal energy storage charge state in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_PCEFF_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[-] Expected power cycle efficiency adjustment in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_SFEFF_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[-] Expected solar field thermal efficiency adjustment in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_QPBSU_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[MWt] Power cycle startup energy consumption in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_WPB_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[MWe] Power cycle electricity production in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_REV_EXPECT, C_csp_reported_outputs::TS_1ST},		  //[MWe*fact] Power cycle electricity production times revenue factor in dispatch model
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_PRES_NCONSTR, C_csp_reported_outputs::TS_1ST},		  //[-] Number of constraint relationships in dispatch model formulation
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_PRES_NVAR, C_csp_reported_outputs::TS_1ST},		  //[-] Number of variables in dispatch model formulation
-	{C_csp_solver_gas::C_solver_outputs::DISPATCH_SOLVE_TIME, C_csp_reported_outputs::TS_1ST},		  //[sec]   Time required to solve the dispatch model at each instance
 
 	// **************************************************************
 	//      Outputs that are reported as weighted averages if 
@@ -504,39 +488,12 @@ void C_csp_solver_gas::init()
     mc_tou.mc_dispatch_params.m_isleapyear = mc_weather.ms_solved_params.m_leapyear;
 	mc_tou.init();
 	mc_tou.init_parent();
-		// Thermal Storage
-	m_is_tes = mc_tes.does_tes_exist();
 
 	if( mc_collector_receiver.m_is_sensible_htf != mc_power_cycle.m_is_sensible_htf )
 	{
 		throw(C_csp_exception("The collector-receiver and power cycle models have incompatible HTF - direct/indirect assumptions", "CSP Solver"));
 	}
 
-    /* 
-    If no TES exists, initialize values to zero. They won't be touched again
-    */
-
-	if(!m_is_tes)
-	{	// Set constant values for tes HTF states
-	
-		mc_tes_ch_htf_state.m_m_dot = 0.0;		//[kg/hr]
-		mc_tes_ch_htf_state.m_temp_in = 0.0;	//[C]
-		mc_tes_ch_htf_state.m_temp_out =0.0;	//[C]
-
-		mc_tes_dc_htf_state.m_m_dot = 0.0;		//[kg/hr]
-		mc_tes_dc_htf_state.m_temp_in = 0.0;	//[C]
-		mc_tes_dc_htf_state.m_temp_out = 0.0;	//[C]
-
-		mc_tes_outputs.m_q_heater = 0.0;		//[MW]
-		mc_tes_outputs.m_W_dot_rhtf_pump = 0.0;	//[MWe]
-		mc_tes_outputs.m_q_dot_loss = 0.0;		//[MW]
-		mc_tes_outputs.m_q_dot_dc_to_htf = 0.0;	//[MW]
-		mc_tes_outputs.m_q_dot_ch_from_htf = 0.0;	//[MW]
-		mc_tes_outputs.m_T_hot_ave = 0.0;		//[K]
-		mc_tes_outputs.m_T_cold_ave = 0.0;		//[K]
-		mc_tes_outputs.m_T_hot_final = 0.0;		//[K]
-		mc_tes_outputs.m_T_cold_final = 0.0;	//[K]
-	}
 }
 
 int C_csp_solver_gas::steps_per_hour()
@@ -565,106 +522,6 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
 	
 	mc_kernel.init(sim_setup, wf_step, baseline_step, mc_csp_messages);
 
-    //instantiate dispatch optimization object
-    csp_dispatch_opt dispatch;
-    //load parameters used by dispatch algorithm
-    //-------------------------------    
-    
-	if( mc_tou.mc_dispatch_params.m_dispatch_optimize )
-	{
-		dispatch.copy_weather_data(mc_weather);
-		dispatch.params.col_rec = &mc_collector_receiver;
-		dispatch.params.mpc_pc = &mc_power_cycle;
-		dispatch.params.siminfo = &mc_kernel.mc_sim_info;
-		dispatch.params.messages = &mc_csp_messages;
-
-		dispatch.params.dt = 1./(double)mc_tou.mc_dispatch_params.m_disp_steps_per_hour;  //hr
-		dispatch.params.dt_pb_startup_cold = mc_power_cycle.get_cold_startup_time();
-		dispatch.params.dt_pb_startup_hot = mc_power_cycle.get_hot_startup_time();
-		dispatch.params.q_pb_standby = mc_power_cycle.get_standby_energy_requirement()*1000.;
-		dispatch.params.e_pb_startup_cold = mc_power_cycle.get_cold_startup_energy()*1000.;
-		dispatch.params.e_pb_startup_hot = mc_power_cycle.get_hot_startup_energy()*1000.;
-
-		dispatch.params.dt_rec_startup = mc_collector_receiver.get_startup_time() / 3600.;
-		dispatch.params.e_rec_startup = mc_collector_receiver.get_startup_energy() * 1000;
-		dispatch.params.q_rec_min = mc_collector_receiver.get_min_power_delivery()*1000.;
-		dispatch.params.w_rec_pump = mc_collector_receiver.get_pumping_parasitic_coef();
-
-
-		dispatch.params.e_tes_init = mc_tes.get_initial_charge_energy() * 1000;
-		dispatch.params.e_tes_min = mc_tes.get_min_charge_energy() * 1000;
-		dispatch.params.e_tes_max = mc_tes.get_max_charge_energy() * 1000;
-		dispatch.params.tes_degrade_rate = mc_tes.get_degradation_rate();
-
-		dispatch.params.q_pb_max = mc_power_cycle.get_max_thermal_power() * 1000;
-		dispatch.params.q_pb_min = mc_power_cycle.get_min_thermal_power() * 1000;
-		dispatch.params.q_pb_des = m_cycle_q_dot_des*1000.;
-		dispatch.params.eta_cycle_ref = mc_power_cycle.get_efficiency_at_load(1.);
-
-        dispatch.params.disp_time_weighting = mc_tou.mc_dispatch_params.m_disp_time_weighting;
-		dispatch.params.rsu_cost = mc_tou.mc_dispatch_params.m_rsu_cost;
-		dispatch.params.csu_cost = mc_tou.mc_dispatch_params.m_csu_cost;
-		dispatch.params.pen_delta_w = mc_tou.mc_dispatch_params.m_pen_delta_w;
-		dispatch.params.q_rec_standby = mc_tou.mc_dispatch_params.m_q_rec_standby;
-		
-		dispatch.params.w_rec_ht = mc_tou.mc_dispatch_params.m_w_rec_ht;
-		dispatch.params.w_track = mc_collector_receiver.get_tracking_power()*1000.0;	//kWe
-		dispatch.params.w_stow = mc_collector_receiver.get_col_startup_power()*1000.0;	//kWe-hr
-		dispatch.params.w_cycle_pump = mc_power_cycle.get_htf_pumping_parasitic_coef();// kWe/kWt
-		dispatch.params.w_cycle_standby = dispatch.params.q_pb_standby*dispatch.params.w_cycle_pump; //kWe
-
-		//Cycle efficiency
-		dispatch.params.eff_table_load.clear();
-		//add zero point
-		dispatch.params.eff_table_load.add_point(0., 0.);    //this is required to allow the model to converge
-
-		int neff = 2;
-		for(int i=0; i<neff; i++)
-		{
-			double x = dispatch.params.q_pb_min + (dispatch.params.q_pb_max - dispatch.params.q_pb_min)/(double)(neff - 1)*i;
-			double xf = x * 1.e-3/m_cycle_q_dot_des;  //MW
-
-			double eta;
-        
-			//eta = 0.86 + xf * 0.28 - xf*xf * 0.14;  //Equation from curve fit of power tower steam rankine Type 224
-			//eta *= m_cycle_eta_des;
-			eta = mc_power_cycle.get_efficiency_at_load(xf);
-
-			dispatch.params.eff_table_load.add_point(x, eta);
-		}
-
-		//cycle efficiency vs temperature
-		dispatch.params.eff_table_Tdb.clear();
-        dispatch.params.wcondcoef_table_Tdb.clear();
-		int neffT = 40;
-
-		for(int i=0; i<neffT; i++)
-		{
-			double T = -10. + 60./(double)(neffT - 1) * i;
-            double wcond;
-			double eta = mc_power_cycle.get_efficiency_at_TPH(T, 1., 30., &wcond) / m_cycle_eta_des;  
-
-			dispatch.params.eff_table_Tdb.add_point(T, eta);
-            dispatch.params.wcondcoef_table_Tdb.add_point(T, wcond/m_cycle_W_dot_des); //fraction of rated gross gen
-		}
-
-	}
-    
-
-        //solver parameters
-    dispatch.solver_params.max_bb_iter = mc_tou.mc_dispatch_params.m_max_iterations;
-    dispatch.solver_params.mip_gap = mc_tou.mc_dispatch_params.m_mip_gap;
-    dispatch.solver_params.solution_timeout = mc_tou.mc_dispatch_params.m_solver_timeout;
-    dispatch.solver_params.bb_type = mc_tou.mc_dispatch_params.m_bb_type;
-    dispatch.solver_params.disp_reporting = mc_tou.mc_dispatch_params.m_disp_reporting;
-    dispatch.solver_params.scaling_type = mc_tou.mc_dispatch_params.m_scaling_type;
-    dispatch.solver_params.presolve_type = mc_tou.mc_dispatch_params.m_presolve_type;
-    dispatch.solver_params.is_write_ampl_dat = mc_tou.mc_dispatch_params.m_is_write_ampl_dat;
-    dispatch.solver_params.is_ampl_engine = mc_tou.mc_dispatch_params.m_is_ampl_engine;
-    dispatch.solver_params.ampl_data_dir = mc_tou.mc_dispatch_params.m_ampl_data_dir;
-    dispatch.solver_params.ampl_exec_call = mc_tou.mc_dispatch_params.m_ampl_exec_call;
-    //-------------------------------
-
         
 	int cr_operating_state = C_csp_collector_receiver::OFF;
 	int pc_operating_state = C_csp_power_cycle::OFF;
@@ -692,22 +549,6 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
     */
 
     double disp_time_last = -9999.;
-
-    //values to report later on the dispatch algorithm
-    double disp_qsf_expect = 0.;
-    double disp_qsfprod_expect = 0.;
-    double disp_qsfsu_expect = 0.;
-    double disp_tes_expect = 0.;
-    double disp_etasf_expect = 0.;
-    double disp_etapb_expect = 0.;
-    double disp_qpbsu_expect = 0.;
-    double disp_wpb_expect = 0.;
-    double disp_rev_expect = 0.;
-    //field efficiency learning parameters
-    double disp_qsf_last = 0.;
-    double disp_qsf_effadj = 1.;
-    double disp_effadj_weight = 0.;
-    //int disp_effadj_count = 0;
 
 	// Block dispatch saved variables
 	bool is_q_dot_pc_target_overwrite = false;
@@ -825,9 +666,9 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
 		double q_dot_tes_dc, q_dot_tes_ch;
 		q_dot_tes_dc = q_dot_tes_ch = std::numeric_limits<double>::quiet_NaN();
 		double m_dot_tes_dc_est, m_dot_tes_ch_est;
-		if (m_is_tes)
+		
+		//predict estimated amount of charge/discharge available
 		{
-			//predict estimated amount of charge/discharge available
 			double T_hot_field_dc_est;	//[K]
 			T_hot_field_dc_est = std::numeric_limits<double>::quiet_NaN();
 			mc_tes.discharge_avail_est(m_T_htf_pc_cold_est + 273.15, mc_kernel.mc_sim_info.ms_ts.m_step, q_dot_tes_dc, m_dot_tes_dc_est, T_hot_field_dc_est);
@@ -837,11 +678,6 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
 			T_cold_field_ch_est = std::numeric_limits<double>::quiet_NaN();
 			mc_tes.charge_avail_est(T_htf_hot_cr_on + 273.15, mc_kernel.mc_sim_info.ms_ts.m_step, q_dot_tes_ch, m_dot_tes_ch_est, T_cold_field_ch_est);
 			m_dot_tes_ch_est *= 3600.0;	//[kg/hr] convert from kg/s
-		}
-		else
-		{
-			q_dot_tes_dc = q_dot_tes_ch = 0.0;
-			m_dot_tes_dc_est = m_dot_tes_ch_est = 0.0;
 		}
 
 		// Can add the following code to simulate with no storage charge/discharge, but IDLE calcs
@@ -893,210 +729,6 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
 			q_pc_target = 0.0;
 		}
 
-
-
-        bool opt_complete = false;
-
-        //Run dispatch optimization?
-        if(mc_tou.mc_dispatch_params.m_dispatch_optimize)
-        {
-
-            //time to reoptimize
-            int opt_horizon = mc_tou.mc_dispatch_params.m_optimize_horizon;
-
-            double hour_now = mc_kernel.mc_sim_info.ms_ts.m_time/3600.;
-
-            //reoptimize when the time is equal to multiples of the first time step
-			if( (int)mc_kernel.mc_sim_info.ms_ts.m_time % (int)(3600.*mc_tou.mc_dispatch_params.m_optimize_frequency) == baseline_step
-				&& disp_time_last != mc_kernel.mc_sim_info.ms_ts.m_time
-                )
-            {
-                //if this is the last day of the year, update the optimization horizon to be no more than the last 24 hours. 
-				
-                if( hour_now >= (8760 - opt_horizon) )
-                    opt_horizon = (int)min((double)opt_horizon, (double)(8761-hour_now));
-
-                //message
-                stringstream ss;
-                ss << "Optimizing thermal energy dispatch profile for time window " 
-					<< (int)(mc_kernel.mc_sim_info.ms_ts.m_time / 3600.) << " - "
-					<< (int)(mc_kernel.mc_sim_info.ms_ts.m_time / 3600.) + mc_tou.mc_dispatch_params.m_optimize_frequency;
-                
-                mc_csp_messages.add_message(C_csp_messages::NOTICE, ss.str());
-
-				send_callback((float)calc_frac_current*100.f);
-
-                ss.flush();
-
-                //get the new price signal
-                dispatch.price_signal.clear();
-                dispatch.price_signal.resize(opt_horizon*mc_tou.mc_dispatch_params.m_disp_steps_per_hour, 1.);
-
-                for(int t=0; t<opt_horizon*mc_tou.mc_dispatch_params.m_disp_steps_per_hour; t++)
-                {
-					mc_tou.call(mc_kernel.mc_sim_info.ms_ts.m_time + t * 3600./(double)mc_tou.mc_dispatch_params.m_disp_steps_per_hour, mc_tou_outputs);
-		            dispatch.price_signal.at(t) = mc_tou_outputs.m_price_mult;
-                }
-
-				// get the new electricity generation limits
-				dispatch.w_lim.clear();
-				dispatch.w_lim.resize(opt_horizon*mc_tou.mc_dispatch_params.m_disp_steps_per_hour, 1.e99);
-				int hour_start = (int)(ceil (mc_kernel.mc_sim_info.ms_ts.m_time / 3600. - 1.e-6)) - 1;
-				for (int t = 0; t<opt_horizon; t++)
-				{
-					for (int d = 0; d < mc_tou.mc_dispatch_params.m_disp_steps_per_hour; d++)
-						dispatch.w_lim.at(t*mc_tou.mc_dispatch_params.m_disp_steps_per_hour+d) = mc_tou.mc_dispatch_params.m_w_lim_full.at(hour_start + t);
-				}
-
-
-                //note the states of the power cycle and receiver
-                dispatch.params.is_pb_operating0 = mc_power_cycle.get_operating_state() == 1;
-                dispatch.params.is_pb_standby0 = mc_power_cycle.get_operating_state() == 2;
-                dispatch.params.is_rec_operating0 = mc_collector_receiver.get_operating_state() == C_csp_collector_receiver::ON;
-                dispatch.params.q_pb0 = mc_pc_out_solver.m_q_dot_htf * 1000.;
-
-                if(dispatch.params.q_pb0 != dispatch.params.q_pb0 )
-                    dispatch.params.q_pb0 = 0.;
-            
-                //time
-                dispatch.params.info_time = mc_kernel.mc_sim_info.ms_ts.m_time; //s
-
-                //Note the state of the thermal energy storage system
-                double q_disch, m_dot_disch, T_tes_return;
-				mc_tes.discharge_avail_est(m_T_htf_cold_des, mc_kernel.mc_sim_info.ms_ts.m_step, q_disch, m_dot_disch, T_tes_return);
-				dispatch.params.e_tes_init = q_disch * 1000. * mc_kernel.mc_sim_info.ms_ts.m_step / 3600. + dispatch.params.e_tes_min;        //kWh
-		        if(dispatch.params.e_tes_init < dispatch.params.e_tes_min )
-                    dispatch.params.e_tes_init = dispatch.params.e_tes_min;
-                if(dispatch.params.e_tes_init > dispatch.params.e_tes_max )
-                    dispatch.params.e_tes_init = dispatch.params.e_tes_max;
-
-                //predict performance for the time horizon
-                if( 
-                    dispatch.predict_performance((int)
-                            (mc_kernel.mc_sim_info.ms_ts.m_time/ baseline_step - 1), 
-                            (int)(opt_horizon * mc_tou.mc_dispatch_params.m_disp_steps_per_hour), 
-                            (int)((3600./baseline_step)/mc_tou.mc_dispatch_params.m_disp_steps_per_hour)
-                            ) 
-                    )
-                {
-                    
-                    //call the optimize method
-                    opt_complete = dispatch.m_last_opt_successful = 
-                        dispatch.optimize();
-                    
-                    if(dispatch.solver_params.disp_reporting && (! dispatch.solver_params.log_message.empty()) )
-                        mc_csp_messages.add_message(C_csp_messages::NOTICE, dispatch.solver_params.log_message.c_str() );
-                    
-					//mc_csp_messages.add_message(C_csp_messages::NOTICE, dispatch.solver_params.log_message.c_str());
-
-                    dispatch.m_current_read_step = 0;   //reset
-                }
-
-                //call again to go back to original state
-                mc_tou.call(mc_kernel.mc_sim_info.ms_ts.m_time, mc_tou_outputs);
-
-            }
-
-            //running from the optimized profile 
-            if(
-                dispatch.m_last_opt_successful 
-                && dispatch.m_current_read_step < (int)dispatch.outputs.q_pb_target.size()
-                )
-            {
-
-                //update the learned field efficiency adjustment factor
-                if(disp_qsf_last > 0.)
-                {
-                    double qopt_last = dispatch.outputs.q_sf_expected.at( dispatch.m_current_read_step )*1.e-3;     //mw
-
-                    double etanew = disp_qsf_last / qopt_last;
-
-                    disp_effadj_weight += disp_qsf_last;
-                    //disp_effadj_count ++;
-
-                    //double wfact = disp_effadj_weight / (double)disp_effadj_count;
-                    
-                    disp_qsf_effadj =+ (1. - etanew)/(min(disp_effadj_weight/disp_qsf_last, 5.));
-                }
-
-                //read in other values
-
-                //calculate the current read step, account for number of dispatch steps per hour and the simulation time step
-                dispatch.m_current_read_step = (int)(mc_kernel.mc_sim_info.ms_ts.m_time * mc_tou.mc_dispatch_params.m_disp_steps_per_hour / 3600. - .001) 
-                    % (mc_tou.mc_dispatch_params.m_optimize_frequency * mc_tou.mc_dispatch_params.m_disp_steps_per_hour ); 
-
-                is_rec_su_allowed = dispatch.outputs.rec_operation.at( dispatch.m_current_read_step );
-                is_pc_sb_allowed = dispatch.outputs.pb_standby.at( dispatch.m_current_read_step );
-                is_pc_su_allowed = dispatch.outputs.pb_operation.at( dispatch.m_current_read_step ) || is_pc_sb_allowed;
-
-                q_pc_target = (dispatch.outputs.q_pb_target.at( dispatch.m_current_read_step ) 
-                    + dispatch.outputs.q_pb_startup.at( dispatch.m_current_read_step ) )
-                    / 1000. ;
-
-                //quality checks
-				/*
-                if(!is_pc_sb_allowed && (q_pc_target + 1.e-5 < q_pc_min))
-                    is_pc_su_allowed = false;
-                if(is_pc_sb_allowed)
-                    q_pc_target = dispatch.params.q_pb_standby*1.e-3; 
-				*/
-
-
-				if (q_pc_target + 1.e-5 < q_pc_min)
-				{
-					is_pc_su_allowed = false;
-					//is_pc_sb_allowed = false;
-					q_pc_target = 0.0;
-				}
-                
-				// Calculate approximate upper limit for power cycle thermal input at current electricity generation limit
-				if (dispatch.w_lim.at(dispatch.m_current_read_step) < 1.e-6)
-					q_pc_max = 0.0;
-				else
-				{
-					double wcond;
-					double eta_corr = mc_power_cycle.get_efficiency_at_TPH(mc_weather.ms_outputs.m_tdry, 1., 30., &wcond) / m_cycle_eta_des; 
-					double eta_calc = dispatch.params.eta_cycle_ref * eta_corr;
-					double eta_diff = 1.;
-					int i = 0;
-					while (eta_diff > 0.001 && i<20)
-					{
-						double q_pc_est = dispatch.w_lim.at(dispatch.m_current_read_step)*1.e-3 / eta_calc;			// Estimated power cycle thermal input at w_lim
-						double eta_new = mc_power_cycle.get_efficiency_at_load(q_pc_est / m_cycle_q_dot_des) * eta_corr;		// Calculated power cycle efficiency
-						eta_diff = fabs(eta_calc - eta_new);
-						eta_calc = eta_new;
-						i++;
-					}
-					q_pc_max = fmin(q_pc_max, dispatch.w_lim.at(dispatch.m_current_read_step)*1.e-3 / eta_calc); // Restrict max pc thermal input to *approximate* current allowable value (doesn't yet account for parasitics)
-					q_pc_max = fmax(q_pc_max, q_pc_target);													// calculated q_pc_target accounts for parasitics --> can be higher than approximate limit 
-				}
-
-                //q_pc_sb = dispatch.outputs.q_pb_standby.at( dispatch.m_current_read_step ) / 1000. ;
-
-                //disp_etapb_expect = dispatch.outputs.eta_pb_expected.at( dispatch.m_current_read_step ) 
-                //                    /** m_cycle_eta_des*/ * ( dispatch.outputs.pb_operation.at( dispatch.m_current_read_step ) ? 1. : 0. );
-                disp_etasf_expect = dispatch.outputs.eta_sf_expected.at( dispatch.m_current_read_step );
-                disp_qsf_expect = dispatch.outputs.q_sfavail_expected.at( dispatch.m_current_read_step )*1.e-3;
-                disp_qsfprod_expect = dispatch.outputs.q_sf_expected.at( dispatch.m_current_read_step )*1.e-3;
-                disp_qsfsu_expect = dispatch.outputs.q_rec_startup.at( dispatch.m_current_read_step )*1.e-3;
-                disp_tes_expect = dispatch.outputs.tes_charge_expected.at( dispatch.m_current_read_step )*1.e-3;
-                disp_qpbsu_expect = dispatch.outputs.q_pb_startup.at( dispatch.m_current_read_step )*1.e-3;
-                //disp_wpb_expect = dispatch.outputs.q_pb_target.at(dispatch.m_current_read_step ) * disp_etapb_expect *1.e-3;  
-                disp_wpb_expect = dispatch.outputs.w_pb_target.at( dispatch.m_current_read_step )*1.e-3;
-                disp_rev_expect = disp_wpb_expect * dispatch.price_signal.at( dispatch.m_current_read_step );
-                disp_etapb_expect = disp_wpb_expect / max(1.e-6, dispatch.outputs.q_pb_target.at( dispatch.m_current_read_step ))* 1.e3 
-                                        * ( dispatch.outputs.pb_operation.at( dispatch.m_current_read_step ) ? 1. : 0. );
-
-                //if( is_sim_timestep_complete ) // disp_time_last != mc_kernel.mc_sim_info.ms_ts.ms_ts.m_time)
-                //    dispatch.m_current_read_step++;
-
-                if(dispatch.m_current_read_step > mc_tou.mc_dispatch_params.m_optimize_frequency * mc_tou.mc_dispatch_params.m_disp_steps_per_hour)
-                    throw C_csp_exception("Counter synchronization error in dispatch optimization routine.", "dispatch");
-            }
-            
-            disp_time_last = mc_kernel.mc_sim_info.ms_ts.m_time;
-                        
-        }
 
         /* 
         ------------ Controller/Solver iteration loop -------------
@@ -4845,9 +4477,6 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
 		mc_power_cycle.converged();
 		mc_tes.converged();
 		
-        //update the tracked field generation
-        disp_qsf_last = mc_cr_out_solver.m_q_startup > 0. ? mc_cr_out_solver.m_q_thermal : 0.;    //only count if not starting up
-
         //Update the estimated thermal energy storage charge state
         double e_tes_disch = 0.;
         if(m_is_tes)
@@ -4953,24 +4582,6 @@ void C_csp_solver_gas::Ssimulate(C_csp_solver_gas::S_sim_setup & sim_setup)
 		mc_reported_outputs.value(C_solver_outputs::SYS_W_DOT_BOP, W_dot_bop);									//[MWe] Balance-of-plant electric parasitic power load   
 		mc_reported_outputs.value(C_solver_outputs::W_DOT_NET, W_dot_net);								//[MWe] Total electric power output to grid        
 		
-            //Dispatch optimization outputs
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_SOLVE_STATE, dispatch.outputs.solve_state);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_SOLVE_ITER, dispatch.outputs.solve_iter);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_SOLVE_OBJ, dispatch.outputs.objective);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_SOLVE_OBJ_RELAX, dispatch.outputs.objective_relaxed);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_QSF_EXPECT, disp_qsf_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_QSFPROD_EXPECT, disp_qsfprod_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_QSFSU_EXPECT, disp_qsfsu_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_TES_EXPECT, disp_tes_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_PCEFF_EXPECT, disp_etapb_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_SFEFF_EXPECT, disp_etasf_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_QPBSU_EXPECT, disp_qpbsu_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_WPB_EXPECT, disp_wpb_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_REV_EXPECT, disp_rev_expect);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_PRES_NCONSTR, dispatch.outputs.presolve_nconstr);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_PRES_NVAR, dispatch.outputs.presolve_nvar);
-		mc_reported_outputs.value(C_solver_outputs::DISPATCH_SOLVE_TIME, dispatch.outputs.solve_time);
-
 		// Report series of operating modes attempted during the timestep as a 'double' using 0s to separate the enumerations 
 		// ... (10 is set as a dummy enumeration so it won't show up as a potential operating mode)
 		int n_op_modes = (int)m_op_mode_tracking.size();
