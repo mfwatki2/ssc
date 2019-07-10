@@ -227,54 +227,42 @@ private:
 	C_csp_solver_gas::C_csp_solver_kernel mc_kernel;
 
 	// Hierarchy logic
-	bool m_is_CR_SU__PC_OFF__TES_OFF__AUX_OFF_avail;
-	bool m_is_CR_ON__PC_SB__TES_OFF__AUX_OFF_avail;
-	bool m_is_CR_ON__PC_SU__TES_OFF__AUX_OFF_avail;
-	bool m_is_CR_ON__PC_OFF__TES_CH__AUX_OFF_avail;
-	bool m_is_CR_OFF__PC_SU__TES_DC__AUX_OFF_avail;
-	bool m_is_CR_DF__PC_MAX__TES_OFF__AUX_OFF_avail;
+	bool m_is_CR_SU__PC_OFF__TES_OFF_avail;
+	bool m_is_CR_SU__PC_MIN__TES_EMPTY_avail;
+	bool m_is_CR_SU__PC_SB__TES_DC_avail;
+	bool m_is_CR_SU__PC_TARGET__TES_DC_avail;
+	bool m_is_CR_SU__PC_RM_LO__TES_EMPTY_avail;
+	bool m_is_CR_SU__PC_SU__TES_DC_avail;
 	
-	bool m_is_CR_ON__PC_RM_HI__TES_OFF__AUX_OFF_avail_HI_SIDE;
-	bool m_is_CR_ON__PC_RM_HI__TES_OFF__AUX_OFF_avail_LO_SIDE;
+	bool m_is_CR_ON__PC_OFF__TES_CH_avail;
+	bool m_is_CR_ON__PC_SU__TES_OFF_avail;
+	bool m_is_CR_ON__PC_SU__TES_CH_avail;
+	bool m_is_CR_ON__PC_MIN__TES_EMPTY_avail;
+	bool m_is_CR_ON__PC_SB__TES_DC_avail;
+	bool m_is_CR_ON__PC_SB__TES_OFF_avail;
+	bool m_is_CR_ON__PC_SB__TES_CH_avail;
+	bool m_is_CR_ON__PC_SB__TES_FULL_avail;
+	bool m_is_CR_ON__PC_RM_HI__TES_FULL_avail;
+	bool m_is_CR_ON__PC_RM_HI__TES_OFF_avail_HI_SIDE;
+	bool m_is_CR_ON__PC_RM_HI__TES_OFF_avail_LO_SIDE;
+	bool m_is_CR_ON__PC_RM_LO__TES_OFF_avail;
+	bool m_is_CR_ON__PC_RM_LO__TES_EMPTY_avail;
+	bool m_is_CR_ON__PC_TARGET__TES_CH_avail_HI_SIDE;
+	bool m_is_CR_ON__PC_TARGET__TES_CH_avail_LO_SIDE;
+	bool m_is_CR_ON__PC_TARGET__TES_DC_avail;
 
-	bool m_is_CR_ON__PC_RM_LO__TES_OFF__AUX_OFF_avail;
+	bool m_is_CR_DF__PC_OFF__TES_FULL_avail;
+	bool m_is_CR_DF__PC_SU__TES_FULL_avail;
+	bool m_is_CR_DF__PC_SU__TES_OFF_avail;
+	bool m_is_CR_DF__PC_MAX__TES_OFF_avail;
+	bool m_is_CR_DF__PC_MAX__TES_FULL_avail;
+	
+	bool m_is_CR_OFF__PC_SU__TES_DC_avail;
+	bool m_is_CR_OFF__PC_MIN__TES_EMPTY_avail;
+	bool m_is_CR_OFF__PC_RM_LO__TES_EMPTY_avail;
+	bool m_is_CR_OFF__PC_TARGET__TES_DC_avail;
+	bool m_is_CR_OFF__PC_SB__TES_DC_avail;
 
-	bool m_is_CR_ON__PC_TARGET__TES_CH__AUX_OFF_avail_HI_SIDE;
-	bool m_is_CR_ON__PC_TARGET__TES_CH__AUX_OFF_avail_LO_SIDE;
-
-	bool m_is_CR_ON__PC_TARGET__TES_DC__AUX_OFF_avail;
-	bool m_is_CR_ON__PC_RM_LO__TES_EMPTY__AUX_OFF_avail;
-
-	bool m_is_CR_DF__PC_OFF__TES_FULL__AUX_OFF_avail;
-
-	bool m_is_CR_OFF__PC_SB__TES_DC__AUX_OFF_avail;
-	bool m_is_CR_OFF__PC_MIN__TES_EMPTY__AUX_OFF_avail;
-	bool m_is_CR_OFF__PC_RM_LO__TES_EMPTY__AUX_OFF_avail;
-
-	bool m_is_CR_ON__PC_SB__TES_CH__AUX_OFF_avail;
-	bool m_is_CR_SU__PC_MIN__TES_EMPTY__AUX_OFF_avail;
-	bool m_is_CR_SU__PC_SB__TES_DC__AUX_OFF_avail;
-	bool m_is_CR_ON__PC_SB__TES_DC__AUX_OFF_avail;
-
-	bool m_is_CR_OFF__PC_TARGET__TES_DC__AUX_OFF_avail;
-	bool m_is_CR_SU__PC_TARGET__TES_DC__AUX_OFF_avail;
-	bool m_is_CR_ON__PC_RM_HI__TES_FULL__AUX_OFF_avail;
-
-	bool m_is_CR_ON__PC_MIN__TES_EMPTY__AUX_OFF_avail;
-
-	bool m_is_CR_SU__PC_RM_LO__TES_EMPTY__AUX_OFF_avail;
-
-	bool m_is_CR_DF__PC_MAX__TES_FULL__AUX_OFF_avail;
-
-	bool m_is_CR_ON__PC_SB__TES_FULL__AUX_OFF_avail;
-
-	bool m_is_CR_SU__PC_SU__TES_DC__AUX_OFF_avail;
-
-	bool m_is_CR_ON__PC_SU__TES_CH__AUX_OFF_avail;
-
-	bool m_is_CR_DF__PC_SU__TES_FULL__AUX_OFF_avail;
-
-	bool m_is_CR_DF__PC_SU__TES_OFF__AUX_OFF_avail;
 
 	// member string for exception messages
 	std::string error_msg;
@@ -361,60 +349,60 @@ public:
 	{
 		ENTRY_MODE = 0,
 		
-		CR_OFF__PC_OFF__TES_OFF__AUX_OFF,
-		CR_SU__PC_OFF__TES_OFF__AUX_OFF,
-		CR_ON__PC_SU__TES_OFF__AUX_OFF,
-		CR_ON__PC_SB__TES_OFF__AUX_OFF,
+		CR_OFF__PC_OFF__TES_OFF,
+		CR_SU__PC_OFF__TES_OFF,
+		CR_ON__PC_SU__TES_OFF,
+		CR_ON__PC_SB__TES_OFF,
 		
-		CR_ON__PC_RM_HI__TES_OFF__AUX_OFF,
-		CR_ON__PC_RM_LO__TES_OFF__AUX_OFF,
+		CR_ON__PC_RM_HI__TES_OFF,
+		CR_ON__PC_RM_LO__TES_OFF,
 		
-		CR_DF__PC_MAX__TES_OFF__AUX_OFF,
+		CR_DF__PC_MAX__TES_OFF,
 
-		CR_OFF__PC_SU__TES_DC__AUX_OFF,
-		CR_ON__PC_OFF__TES_CH__AUX_OFF,
+		CR_OFF__PC_SU__TES_DC,
+		CR_ON__PC_OFF__TES_CH,
 
 		SKIP_10,
 
-		CR_ON__PC_TARGET__TES_CH__AUX_OFF,
-		CR_ON__PC_TARGET__TES_DC__AUX_OFF,
+		CR_ON__PC_TARGET__TES_CH,
+		CR_ON__PC_TARGET__TES_DC,
 
-		CR_ON__PC_RM_LO__TES_EMPTY__AUX_OFF,
+		CR_ON__PC_RM_LO__TES_EMPTY,
 
-		CR_DF__PC_OFF__TES_FULL__AUX_OFF,
+		CR_DF__PC_OFF__TES_FULL,
 		
-		CR_OFF__PC_SB__TES_DC__AUX_OFF,
-		CR_OFF__PC_MIN__TES_EMPTY__AUX_OFF,
-		CR_OFF__PC_RM_LO__TES_EMPTY__AUX_OFF,
+		CR_OFF__PC_SB__TES_DC,
+		CR_OFF__PC_MIN__TES_EMPTY,
+		CR_OFF__PC_RM_LO__TES_EMPTY,
 
-		CR_ON__PC_SB__TES_CH__AUX_OFF,
-		CR_SU__PC_MIN__TES_EMPTY__AUX_OFF,
+		CR_ON__PC_SB__TES_CH,
+		CR_SU__PC_MIN__TES_EMPTY,
 
 		SKIP_20,
 
-		CR_SU__PC_SB__TES_DC__AUX_OFF,
-		CR_ON__PC_SB__TES_DC__AUX_OFF,
-		CR_OFF__PC_TARGET__TES_DC__AUX_OFF,
-		CR_SU__PC_TARGET__TES_DC__AUX_OFF,
-		CR_ON__PC_RM_HI__TES_FULL__AUX_OFF,
+		CR_SU__PC_SB__TES_DC,
+		CR_ON__PC_SB__TES_DC,
+		CR_OFF__PC_TARGET__TES_DC,
+		CR_SU__PC_TARGET__TES_DC,
+		CR_ON__PC_RM_HI__TES_FULL,
 
-		CR_ON__PC_MIN__TES_EMPTY__AUX_OFF,
+		CR_ON__PC_MIN__TES_EMPTY,
 
-		CR_SU__PC_RM_LO__TES_EMPTY__AUX_OFF,
+		CR_SU__PC_RM_LO__TES_EMPTY,
 
-		CR_DF__PC_MAX__TES_FULL__AUX_OFF,
+		CR_DF__PC_MAX__TES_FULL,
 
-		CR_ON__PC_SB__TES_FULL__AUX_OFF,
+		CR_ON__PC_SB__TES_FULL,
 
 		SKIP_30,
 
-		CR_SU__PC_SU__TES_DC__AUX_OFF,
+		CR_SU__PC_SU__TES_DC,
 
-		CR_ON__PC_SU__TES_CH__AUX_OFF,
+		CR_ON__PC_SU__TES_CH,
 
-		CR_DF__PC_SU__TES_FULL__AUX_OFF,
+		CR_DF__PC_SU__TES_FULL,
 
-		CR_DF__PC_SU__TES_OFF__AUX_OFF
+		CR_DF__PC_SU__TES_OFF
 	};
 
     static std::string tech_operating_modes_str[];
