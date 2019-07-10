@@ -71,9 +71,9 @@ static C_csp_reported_outputs::S_output_info S_output_info[] =
 };
 
 C_csp_gas_collector_receiver::C_csp_gas_collector_receiver(C_pt_sf_perf_interp & pt_heliostatfield,
-	C_gen3gas_receiver & gen3gas_receiver):
+	std::vector<C_gen3gas_receiver> & gen3gas_receivers):
 	mc_pt_heliostatfield(pt_heliostatfield),
-	mc_gen3gas_receiver(gen3gas_receiver)
+	mc_gen3gas_receivers(gen3gas_receivers)
 {
 	mc_reported_outputs.construct(S_output_info);
 }
@@ -85,10 +85,12 @@ void C_csp_gas_collector_receiver::init(const C_csp_collector_receiver::S_csp_cr
 				C_csp_collector_receiver::S_csp_cr_solved_params & solved_params)
 {
 	mc_pt_heliostatfield.init();
-	mc_gen3gas_receiver.init();
+	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+		mc_gen3gas_receivers.at(i).init();
 
-	solved_params.m_T_htf_cold_des = mc_gen3gas_receiver.m_T_htf_cold_des;			//[K]
-	solved_params.m_q_dot_rec_des = mc_gen3gas_receiver.m_q_rec_des / 1.E6;		//[MW]
+	solved_params.m_T_htf_cold_des = mc_gen3gas_receivers.front().m_T_cold_des;			//[K]
+	solved_params.m_q_dot_rec_des = mc_gen3gas_receivers.front().m_q_rec_des / 1.E6;		//[MW]
+
 	solved_params.m_A_aper_total = mc_pt_heliostatfield.ms_params.m_A_sf;			//[m^2]
 
 	return;
@@ -96,56 +98,56 @@ void C_csp_gas_collector_receiver::init(const C_csp_collector_receiver::S_csp_cr
 
 int C_csp_gas_collector_receiver::get_operating_state()
 {
-	return mc_gen3gas_receiver.get_operating_state();
+	return mc_gen3gas_receivers.front().get_operating_state();
 }
 
 double C_csp_gas_collector_receiver::get_startup_time()
 {
-    return mc_gen3gas_receiver.m_rec_su_delay * 3600.; //sec   
+    return mc_gen3gas_receivers.front().m_rec_su_delay * 3600.; //sec   
 }
 
 double C_csp_gas_collector_receiver::get_startup_energy() //MWh
 {
-    return mc_gen3gas_receiver.m_rec_qf_delay * mc_gen3gas_receiver.m_q_rec_des*1.e-6;
+    return mc_gen3gas_receivers.front().m_rec_qf_delay * mc_gen3gas_receivers.front().m_q_rec_des*1.e-6;
 }
 
 double C_csp_gas_collector_receiver::get_pumping_parasitic_coef()  //MWe/MWt
 {
-    HTFProperties *htf = mc_gen3gas_receiver.get_htf_property_object();
+	return 0.;
+ //   HTFProperties *htf = mc_gen3gas_receiver.get_htf_property_object();
 
-    C_gen3gas_receiver *R = &mc_gen3gas_receiver;
+ //   C_gen3gas_receiver *R = &mc_gen3gas_receiver;
 
-    double Tavg = (R->m_T_htf_cold_des + R->m_T_htf_hot_des)/2.;
+ //   double Tavg = (R->m_T_htf_cold_des + R->m_T_htf_hot_des)/2.;
 
-    double mu_coolant = htf->visc(Tavg);					//[kg/m-s] Absolute viscosity of the coolant
-	double k_coolant = htf->cond(Tavg);					//[W/m-K] Conductivity of the coolant
-	double rho_coolant = htf->dens(Tavg, 1.0);			//[kg/m^3] Density of the coolant
-    double c_p_coolant = htf->Cp(Tavg)*1e3;                 //[J/kg-K] Specific heat
+ //   double mu_coolant = htf->visc(Tavg);					//[kg/m-s] Absolute viscosity of the coolant
+	//double k_coolant = htf->cond(Tavg);					//[W/m-K] Conductivity of the coolant
+	//double rho_coolant = htf->dens(Tavg, 1.0);			//[kg/m^3] Density of the coolant
+ //   double c_p_coolant = htf->Cp(Tavg)*1e3;                 //[J/kg-K] Specific heat
 
-    double m_dot_salt = R->m_q_rec_des / (c_p_coolant * (R->m_T_htf_hot_des - R->m_T_htf_cold_des) );
+ //   double m_dot_salt = R->m_q_rec_des / (c_p_coolant * (R->m_T_htf_hot_des - R->m_T_htf_cold_des) );
 
-	double n_t = (int)(CSP::pi*R->m_d_rec / (R->m_od_tube*R->m_n_panels));	// The number of tubes per panel, as a function of the number of panels and the desired diameter of the receiver
-	double id_tube = R->m_od_tube - 2 * R->m_th_tube;			//[m] Inner diameter of receiver tube
+	//double n_t = (int)(CSP::pi*R->m_d_rec / (R->m_od_tube*R->m_n_panels));	// The number of tubes per panel, as a function of the number of panels and the desired diameter of the receiver
+	//double id_tube = R->m_od_tube - 2 * R->m_th_tube;			//[m] Inner diameter of receiver tube
 
 
-	double u_coolant = m_dot_salt / (n_t*rho_coolant*pow((id_tube / 2.0), 2)*CSP::pi);	//[m/s] Average velocity of the coolant through the receiver tubes
-	double Re_inner = rho_coolant*u_coolant*id_tube / mu_coolant;				//[-] Reynolds number of internal flow
-	double Pr_inner = c_p_coolant*mu_coolant / k_coolant;							//[-] Prandtl number of internal flow
-	double Nusselt_t, f;
-    double LoverD = R->m_h_rec / id_tube;
-	double RelRough = (4.5e-5) / id_tube;	//[-] Relative roughness of the tubes. http:www.efunda.com/formulae/fluids/roughness.cfm
-	CSP::PipeFlow(Re_inner, Pr_inner, LoverD, RelRough, Nusselt_t, f);
+	//double u_coolant = m_dot_salt / (n_t*rho_coolant*pow((id_tube / 2.0), 2)*CSP::pi);	//[m/s] Average velocity of the coolant through the receiver tubes
+	//double Re_inner = rho_coolant*u_coolant*id_tube / mu_coolant;				//[-] Reynolds number of internal flow
+	//double Pr_inner = c_p_coolant*mu_coolant / k_coolant;							//[-] Prandtl number of internal flow
+	//double Nusselt_t, f;
+ //   double LoverD = R->m_h_rec / id_tube;
+	//double RelRough = (4.5e-5) / id_tube;	//[-] Relative roughness of the tubes. http:www.efunda.com/formulae/fluids/roughness.cfm
+	//CSP::PipeFlow(Re_inner, Pr_inner, LoverD, RelRough, Nusselt_t, f);
 
-    double deltap, wdot;
-    mc_gen3gas_receiver.calc_pump_performance(rho_coolant, m_dot_salt, f, deltap, wdot );
+ //   double deltap, wdot;
+ //   mc_gen3gas_receiver.calc_pump_performance(rho_coolant, m_dot_salt, f, deltap, wdot );
 
-    return wdot / R->m_q_rec_des;
-
+ //   return wdot / R->m_q_rec_des;
 }
 
 double C_csp_gas_collector_receiver::get_min_power_delivery()    //MWt
 {
-    return mc_gen3gas_receiver.m_f_rec_min * mc_gen3gas_receiver.m_q_rec_des*1.e-6;
+    return mc_gen3gas_receivers.front().m_f_rec_min * mc_gen3gas_receivers.front().m_q_rec_des*1.e-6;
 }
 
 
@@ -181,42 +183,62 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 	receiver_inputs.m_field_eff = mc_pt_heliostatfield.ms_outputs.m_eta_field;
 	receiver_inputs.m_input_operation_mode = inputs.m_input_operation_mode;
 	receiver_inputs.m_flux_map_input = &mc_pt_heliostatfield.ms_outputs.m_flux_map_out;
-	mc_gen3gas_receiver.call(weather, htf_state_in, receiver_inputs, sim_info);
+	for(size_t i=0; i<mc_gen3gas_receivers.size(); i++)
+		mc_gen3gas_receivers.at(i).call(weather, htf_state_in, receiver_inputs, sim_info);
 		
 	// Set collector/receiver parent class outputs and return
-	//cr_out_report.m_eta_field = mc_pt_heliostatfield.ms_outputs.m_eta_field;				//[-]
-    //cr_out_report.m_sf_adjust_out = mc_pt_heliostatfield.ms_outputs.m_sf_adjust_out;
-	//cr_out_report.m_q_dot_field_inc = mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc;	//[MWt]
+	cr_out_solver.m_q_thermal = 0.;				//[MW]
+	cr_out_solver.m_q_startup = 0.;				//[MWt-hr]
+	cr_out_solver.m_m_dot_salt_tot = 0.;		//[kg/hr]
+	cr_out_solver.m_T_salt_hot = 0.;				//[C]
+	cr_out_solver.m_component_defocus = 0.;	//[-]
+	cr_out_solver.m_W_dot_htf_pump = 0.;			//[MWe]
+	cr_out_solver.m_W_dot_col_tracking = 0.;		//[MWe]
+	cr_out_solver.m_time_required_su = 0.;	//[s]
 
-	//cr_out_report.m_q_dot_rec_inc = mc_gen3gas_receiver.ms_outputs.m_q_dot_rec_inc;		//[MWt]
-	//cr_out_report.m_eta_thermal = mc_gen3gas_receiver.ms_outputs.m_eta_therm;				//[-]
-	cr_out_solver.m_q_thermal = mc_gen3gas_receiver.ms_outputs.m_Q_thermal;				//[MW]
-	cr_out_solver.m_q_startup = mc_gen3gas_receiver.ms_outputs.m_q_startup;				//[MWt-hr]
-	//cr_out_report.m_q_dot_piping_loss = mc_gen3gas_receiver.ms_outputs.m_q_dot_piping_loss;	//[MWt]
-	cr_out_solver.m_m_dot_salt_tot = mc_gen3gas_receiver.ms_outputs.m_m_dot_salt_tot;		//[kg/hr]
-	cr_out_solver.m_T_salt_hot = mc_gen3gas_receiver.ms_outputs.m_T_salt_hot;				//[C]
-	
-	cr_out_solver.m_component_defocus = mc_gen3gas_receiver.ms_outputs.m_component_defocus;	//[-]
-	
-	cr_out_solver.m_W_dot_htf_pump = mc_gen3gas_receiver.ms_outputs.m_W_dot_pump;			//[MWe]
-	cr_out_solver.m_W_dot_col_tracking = mc_pt_heliostatfield.ms_outputs.m_pparasi;		//[MWe]
+	double norm = 1. / (double)mc_gen3gas_receivers.size();
 
-	cr_out_solver.m_time_required_su = mc_gen3gas_receiver.ms_outputs.m_time_required_su;	//[s]
+	double q_dot_inc = 0, eta_thermal = 0., q_dot_thermal = 0., m_dot_htf = 0., 
+			q_dot_startup = 0., T_htf_in = 0., T_htf_out = 0., q_dot_pipe_loss = 0., 
+			q_dot_loss = 0.;
+
+	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+	{
+		cr_out_solver.m_q_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;				//[MW]
+		cr_out_solver.m_q_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup;				//[MWt-hr]
+		cr_out_solver.m_m_dot_salt_tot += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;		//[kg/hr]
+		cr_out_solver.m_T_salt_hot += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;				//[C]
+		cr_out_solver.m_component_defocus += mc_gen3gas_receivers.at(i).ms_outputs.m_component_defocus;	//[-]
+		cr_out_solver.m_W_dot_htf_pump += mc_gen3gas_receivers.at(i).ms_outputs.m_W_dot_pump;			//[MWe]
+		cr_out_solver.m_W_dot_col_tracking += mc_pt_heliostatfield.ms_outputs.m_pparasi;		//[MWe]
+		cr_out_solver.m_time_required_su = std::fmax(cr_out_solver.m_time_required_su, mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su);	//[s]
+
+		q_dot_inc += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_rec_inc;
+		eta_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_eta_therm*mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
+		q_dot_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
+		m_dot_htf += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;
+		q_dot_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup / (mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su / 3600.0);
+		T_htf_out += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;
+		q_dot_pipe_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_piping_loss;
+		q_dot_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_rad_sum + mc_gen3gas_receivers.at(i).ms_outputs.m_q_conv_sum;
+	}
+
+	eta_thermal /= q_dot_thermal; //weighted efficiency
 
 	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc);	//[MWt]
 	mc_reported_outputs.value(E_FIELD_ETA_OPT, mc_pt_heliostatfield.ms_outputs.m_eta_field);			//[-]
 	mc_reported_outputs.value(E_FIELD_ADJUST, mc_pt_heliostatfield.ms_outputs.m_sf_adjust_out);			//[-]
 
-	mc_reported_outputs.value(E_Q_DOT_INC, mc_gen3gas_receiver.ms_outputs.m_q_dot_rec_inc);	//[MWt]
-	mc_reported_outputs.value(E_ETA_THERMAL, mc_gen3gas_receiver.ms_outputs.m_eta_therm);		//[-]
-	mc_reported_outputs.value(E_Q_DOT_THERMAL, mc_gen3gas_receiver.ms_outputs.m_Q_thermal);	//[MWt]
-	mc_reported_outputs.value(E_M_DOT_HTF, mc_gen3gas_receiver.ms_outputs.m_m_dot_salt_tot);	//[kg/hr]
+	mc_reported_outputs.value(E_Q_DOT_INC, q_dot_inc);	//[MWt]
+	mc_reported_outputs.value(E_ETA_THERMAL, eta_thermal);		//[-]
+	mc_reported_outputs.value(E_Q_DOT_THERMAL, q_dot_thermal);	//[MWt]
+	mc_reported_outputs.value(E_M_DOT_HTF, m_dot_htf);	//[kg/hr]
 		// If startup, then timestep may have changed (why not report this from 222 in MWt?)
-	mc_reported_outputs.value(E_Q_DOT_STARTUP, mc_gen3gas_receiver.ms_outputs.m_q_startup / (mc_gen3gas_receiver.ms_outputs.m_time_required_su / 3600.0));		//[MWt])
+	mc_reported_outputs.value(E_Q_DOT_STARTUP, q_dot_startup);		//[MWt])
 	mc_reported_outputs.value(E_T_HTF_IN, htf_state_in.m_temp);									//[C]
-	mc_reported_outputs.value(E_T_HTF_OUT, mc_gen3gas_receiver.ms_outputs.m_T_salt_hot);		//[C]
-	mc_reported_outputs.value(E_Q_DOT_PIPE_LOSS, mc_gen3gas_receiver.ms_outputs.m_q_dot_piping_loss);	//[MWt]
-    mc_reported_outputs.value(E_Q_DOT_LOSS, mc_gen3gas_receiver.ms_outputs.m_q_rad_sum + mc_gen3gas_receiver.ms_outputs.m_q_conv_sum ); //MWt
+	mc_reported_outputs.value(E_T_HTF_OUT, T_htf_out);		//[C]
+	mc_reported_outputs.value(E_Q_DOT_PIPE_LOSS, q_dot_pipe_loss);	//[MWt]
+    mc_reported_outputs.value(E_Q_DOT_LOSS, q_dot_loss); //MWt
 }
 
 void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &weather,
@@ -230,42 +252,60 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 	mc_pt_heliostatfield.off(sim_info);
 
 	// Set collector/receiver parent class outputs from field model
-	//cr_out_report.m_eta_field = mc_pt_heliostatfield.ms_outputs.m_eta_field;				//[-]
-    //cr_out_report.m_sf_adjust_out = mc_pt_heliostatfield.ms_outputs.m_sf_adjust_out;
-	//cr_out_report.m_q_dot_field_inc = mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc;	//[MWt]
 	cr_out_solver.m_W_dot_col_tracking = mc_pt_heliostatfield.ms_outputs.m_pparasi;			//[MWe]
+	cr_out_solver.m_component_defocus = 1.0;	//[-]
 
-	// Now, call the tower-receiver model
-	mc_gen3gas_receiver.off(weather, htf_state_in, sim_info);
+	cr_out_solver.m_q_thermal = 0.;				//[MW]
+	cr_out_solver.m_q_startup = 0.;				//[MWt-hr]
+	cr_out_solver.m_m_dot_salt_tot = 0.;		//[kg/hr]
+	cr_out_solver.m_T_salt_hot = 0.;				//[C]
+	cr_out_solver.m_component_defocus = 0.;	//[-]
+	cr_out_solver.m_W_dot_htf_pump = 0.;			//[MWe]
+	cr_out_solver.m_W_dot_col_tracking = 0.;		//[MWe]
+	cr_out_solver.m_time_required_su = 0.;	//[s]
+
+	double norm = 1. / (double)mc_gen3gas_receivers.size();
+
+	double q_dot_inc = 0, eta_thermal = 0., q_dot_thermal = 0., m_dot_htf = 0.,
+		q_dot_startup = 0., T_htf_in = 0., T_htf_out = 0., q_dot_pipe_loss = 0.,
+		q_dot_loss = 0.;
 
 	// Set collector/receiver parent class outputs from field model
-	//cr_out_report.m_q_dot_rec_inc = mc_gen3gas_receiver.ms_outputs.m_q_dot_rec_inc;		 //[MWt]
-	//cr_out_report.m_eta_thermal = mc_gen3gas_receiver.ms_outputs.m_eta_therm;				 //[-]
-	cr_out_solver.m_q_thermal = mc_gen3gas_receiver.ms_outputs.m_Q_thermal;				 //[MW]
-	cr_out_solver.m_q_startup = mc_gen3gas_receiver.ms_outputs.m_q_startup;				 //[MWt-hr]
-	//cr_out_report.m_q_dot_piping_loss = mc_gen3gas_receiver.ms_outputs.m_q_dot_piping_loss; //[MWt]
-	cr_out_solver.m_m_dot_salt_tot = mc_gen3gas_receiver.ms_outputs.m_m_dot_salt_tot;		 //[kg/hr]
-	cr_out_solver.m_T_salt_hot = mc_gen3gas_receiver.ms_outputs.m_T_salt_hot;				 //[C]
-	cr_out_solver.m_component_defocus = 1.0;	//[-]
-	cr_out_solver.m_W_dot_htf_pump = mc_gen3gas_receiver.ms_outputs.m_W_dot_pump;			 //[MWe]
-		// Not sure that we want 'startup time required' calculated in 'off' call
-	cr_out_solver.m_time_required_su = mc_gen3gas_receiver.ms_outputs.m_time_required_su;	 //[s]
-	
+	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+	{
+		mc_gen3gas_receivers.at(i).off(weather, htf_state_in, sim_info);
+
+		cr_out_solver.m_q_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;				//[MW]
+		cr_out_solver.m_q_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup;				//[MWt-hr]
+		cr_out_solver.m_m_dot_salt_tot += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;		//[kg/hr]
+		cr_out_solver.m_T_salt_hot += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;				//[C]
+		cr_out_solver.m_W_dot_htf_pump += mc_gen3gas_receivers.at(i).ms_outputs.m_W_dot_pump;			//[MWe]
+		cr_out_solver.m_time_required_su = std::fmax(cr_out_solver.m_time_required_su, mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su);	//[s]
+
+		q_dot_inc += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_rec_inc;
+		eta_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_eta_therm*mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
+		q_dot_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
+		m_dot_htf += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;
+		q_dot_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup / (mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su / 3600.0);
+		T_htf_out += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;
+		q_dot_pipe_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_piping_loss;
+		q_dot_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_rad_sum + mc_gen3gas_receivers.at(i).ms_outputs.m_q_conv_sum;
+	}
+
 	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc);	//[MWt]
 	mc_reported_outputs.value(E_FIELD_ETA_OPT, mc_pt_heliostatfield.ms_outputs.m_eta_field);			//[-]
 	mc_reported_outputs.value(E_FIELD_ADJUST, mc_pt_heliostatfield.ms_outputs.m_sf_adjust_out);			//[-]
 
-	mc_reported_outputs.value(E_Q_DOT_INC, mc_gen3gas_receiver.ms_outputs.m_q_dot_rec_inc);	//[MWt]
-	mc_reported_outputs.value(E_ETA_THERMAL, mc_gen3gas_receiver.ms_outputs.m_eta_therm);		//[-]
-	mc_reported_outputs.value(E_Q_DOT_THERMAL, mc_gen3gas_receiver.ms_outputs.m_Q_thermal);	//[MWt]
-	mc_reported_outputs.value(E_M_DOT_HTF, mc_gen3gas_receiver.ms_outputs.m_m_dot_salt_tot);	//[kg/hr]
-		// Should not be startup energy in OFF, but timestep may be subhourly/nonuniform (why not report this from 222 in MWt?)
-	mc_reported_outputs.value(E_Q_DOT_STARTUP, mc_gen3gas_receiver.ms_outputs.m_q_startup / (mc_gen3gas_receiver.ms_outputs.m_time_required_su / 3600.0));		//[MWt])
+	mc_reported_outputs.value(E_Q_DOT_INC, q_dot_inc);	//[MWt]
+	mc_reported_outputs.value(E_ETA_THERMAL, eta_thermal);		//[-]
+	mc_reported_outputs.value(E_Q_DOT_THERMAL, q_dot_thermal);	//[MWt]
+	mc_reported_outputs.value(E_M_DOT_HTF, m_dot_htf);	//[kg/hr]
+		// If startup, then timestep may have changed (why not report this from 222 in MWt?)
+	mc_reported_outputs.value(E_Q_DOT_STARTUP, q_dot_startup);		//[MWt])
 	mc_reported_outputs.value(E_T_HTF_IN, htf_state_in.m_temp);									//[C]
-	mc_reported_outputs.value(E_T_HTF_OUT, mc_gen3gas_receiver.ms_outputs.m_T_salt_hot);		//[C]
-	mc_reported_outputs.value(E_Q_DOT_PIPE_LOSS, mc_gen3gas_receiver.ms_outputs.m_q_dot_piping_loss);	//[MWt]
-    mc_reported_outputs.value(E_Q_DOT_LOSS, mc_gen3gas_receiver.ms_outputs.m_q_rad_sum + mc_gen3gas_receiver.ms_outputs.m_q_conv_sum ); //MWt
-    
+	mc_reported_outputs.value(E_T_HTF_OUT, T_htf_out);		//[C]
+	mc_reported_outputs.value(E_Q_DOT_PIPE_LOSS, q_dot_pipe_loss);	//[MWt]
+	mc_reported_outputs.value(E_Q_DOT_LOSS, q_dot_loss); //MWt
 	return;
 }
 
@@ -355,7 +395,7 @@ double C_csp_gas_collector_receiver::get_collector_area()
 
     //return p->m_dens_mirror * p->m_helio_height * p->m_helio_width * (double)p->m_helio_positions.nrows();
 
-    return mc_gen3gas_receiver.m_A_sf;
+    return mc_gen3gas_receivers.front().m_A_sf;
 }
 
 double C_csp_gas_collector_receiver::calculate_thermal_efficiency_approx( const C_csp_weatherreader::S_outputs &weather, double q_inc )
@@ -364,25 +404,27 @@ double C_csp_gas_collector_receiver::calculate_thermal_efficiency_approx( const 
     A very approximate thermal efficiency used for quick optimization performance projections
     */
 
-    double T_eff = (mc_gen3gas_receiver.m_T_htf_cold_des + mc_gen3gas_receiver.m_T_htf_hot_des)*.55;
+	return 0.85;
 
-    double T_amb = weather.m_tdry + 273.15;
-    double T_eff4 = T_eff * T_eff;
-    T_eff4 *= T_eff4;
-    double T_amb4 = T_amb * T_amb;
-    T_amb4 *= T_amb4;
+    //double T_eff = (mc_gen3gas_receivers.front().m_T_cold_des + mc_gen3gas_receivers.front().m_T_hot_des)*.55;
 
-    double Arec = mc_gen3gas_receiver.m_d_rec * 3.1415 * mc_gen3gas_receiver.m_h_rec;
+    //double T_amb = weather.m_tdry + 273.15;
+    //double T_eff4 = T_eff * T_eff;
+    //T_eff4 *= T_eff4;
+    //double T_amb4 = T_amb * T_amb;
+    //T_amb4 *= T_amb4;
 
-    double q_rad = 5.67e-8*mc_gen3gas_receiver.m_epsilon * Arec * (T_eff4 - T_amb4) * 1.e-6;   //MWt
+    //double Arec = mc_gen3gas_receiver.m_d_rec * 3.1415 * mc_gen3gas_receiver.m_h_rec;
 
-    double v = weather.m_wspd;
-    double v2 = v*v;
-    double v3 = v2*v;
+    //double q_rad = 5.67e-8*mc_gen3gas_receiver.m_epsilon * Arec * (T_eff4 - T_amb4) * 1.e-6;   //MWt
 
-    double q_conv = q_rad/2. * (-0.001129*v3 + 0.031229*v2 - 0.01822*v +0.962476);  //convection is about half radiation, scale by wind speed. surrogate regression from molten salt run.
+    //double v = weather.m_wspd;
+    //double v2 = v*v;
+    //double v3 = v2*v;
 
-    return max(1. - (q_rad + q_conv)/q_inc, 0.);
+    //double q_conv = q_rad/2. * (-0.001129*v3 + 0.031229*v2 - 0.01822*v +0.962476);  //convection is about half radiation, scale by wind speed. surrogate regression from molten salt run.
+
+    //return max(1. - (q_rad + q_conv)/q_inc, 0.);
 
 }
 
@@ -390,7 +432,8 @@ double C_csp_gas_collector_receiver::calculate_thermal_efficiency_approx( const 
 void C_csp_gas_collector_receiver::converged()
 {
 	mc_pt_heliostatfield.converged();
-	mc_gen3gas_receiver.converged();
+	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+		mc_gen3gas_receivers.at(i).converged();
 
 	// Hardcode to test...
 	//mc_reported_outputs.set_timestep_output(E_Q_DOT_THERMAL, mc_gen3gas_receiver.ms_outputs.m_Q_thermal);	//[MWt]
