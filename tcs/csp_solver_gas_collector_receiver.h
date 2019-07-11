@@ -148,9 +148,4 @@ public:
 
 
 
-
-
-
-
-
-#endif //__csp_solver_mspt_collector_receiver_
+#endif //

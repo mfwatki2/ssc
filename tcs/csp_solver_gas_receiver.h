@@ -56,6 +56,8 @@
 #include "csp_solver_gas.h"
 #include "csp_solver_core.h"
 
+class GaussMarkov;
+
 class C_gen3gas_receiver
 {
 private:
@@ -117,6 +119,7 @@ public:
 	C_csp_messages csp_messages;
 
 	// Data
+	bool m_use_performance_tables;
 	double m_w_rec;					//[m]
 	double m_h_rec;					//[m]
 	double m_h_tower;				//[m]
@@ -152,13 +155,16 @@ public:
 	util::matrix_t<double> m_field_fl_props;	
 	int m_mat_tube;
 
+	GaussMarkov *m_presdrop_map;
+	GaussMarkov *m_thermeff_map;
+
 	struct S_inputs
 	{
 		double m_field_eff;					//[-] 
 		int m_input_operation_mode;			//[-]
 
 		const util::matrix_t<double> *m_flux_map_input;		//[-]
-
+		
 		S_inputs()
 		{
 			m_field_eff = std::numeric_limits<double>::quiet_NaN();
@@ -171,7 +177,7 @@ public:
 	struct S_outputs
 	{
 		
-		double m_m_dot_salt_tot;		//[kg/hr] 
+		double m_m_dot_tot;		//[kg/hr] 
 		double m_eta_therm;				//[-] RECEIVER thermal efficiency
 		double m_W_dot_pump;			//[MW] 
 		double m_q_conv_sum;			//[MW] 
@@ -185,7 +191,7 @@ public:
 		double m_dP_receiver;			//[bar] receiver pressure drop
 		double m_dP_total;				//[bar] total pressure drop
 		double m_vel_htf;				//[m/s] HTF flow velocity through receiver tubes
-		double m_T_salt_cold;			//[C] 
+		double m_T_htf_cold;			//[C] 
 		double m_m_dot_ss;				//[kg/hr] 
 		double m_q_dot_ss;				//[MW] 
 		double m_f_timestep;			//[-]
@@ -194,9 +200,9 @@ public:
 	
 		S_outputs()
 		{
-			m_m_dot_salt_tot = m_eta_therm = m_W_dot_pump = m_q_conv_sum = m_q_rad_sum = m_Q_thermal =
+			m_m_dot_tot = m_eta_therm = m_W_dot_pump = m_q_conv_sum = m_q_rad_sum = m_Q_thermal =
 				m_T_salt_hot = m_field_eff_adj = m_component_defocus = m_q_dot_rec_inc = m_q_startup = m_dP_receiver = m_dP_total =
-				m_vel_htf = m_T_salt_cold = m_m_dot_ss = m_q_dot_ss = m_f_timestep = 
+				m_vel_htf = m_T_htf_cold = m_m_dot_ss = m_q_dot_ss = m_f_timestep = 
 				m_time_required_su = m_q_dot_piping_loss = std::numeric_limits<double>::quiet_NaN();
 		}
 	};
@@ -225,7 +231,7 @@ public:
 
 	void converged();
 
-    void calc_receiver_presdrop(double rho_f, double mdot, double ffact, double &PresDrop_calc);
+    void calc_receiver_presdrop(double mdot, double P_in, double &PresDrop_calc);
 
     HTFProperties *get_htf_property_object();
 

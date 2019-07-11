@@ -50,7 +50,7 @@
 #include "csp_solver_gas_receiver.h"
 #include "csp_solver_gas.h"
 #include "sam_csp_util.h"
-
+#include "interpolation_routines.h"
 
 /*
 	NodeNodeNode
@@ -351,11 +351,7 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 		rec_is_off = true;
 	}
 
-	double T_coolant_prop = (m_T_out_target + T_cold_in) / 2.0;		//[K] The temperature at which the coolant properties are evaluated. Validated as constant (mjw)
-	c_p_coolant = field_htfProps.Cp(T_coolant_prop)*1000.0;						//[J/kg-K] Specific heat of the coolant
-
 	double m_dot_max = m_m_dot_htf_max;
-
 	double q_abs_sum = 0.0;
 	double err_od = 999.0;	// Reset error before iteration
 
@@ -417,7 +413,7 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 		double tol = 0.001;
 
 		//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-		//                            ITERATION STARTS HERE
+		//                          thermal performance loop
 		//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 		int qq_max = 50;
 		double m_dot = std::numeric_limits<double>::quiet_NaN();
@@ -439,83 +435,109 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 
 			m_dot = m_dot_guess;
 
-			for( int i = 0; i < m_n_flux_x; i++ )
+			double T_coolant_prop = (m_T_out_target + T_cold_in) / 2.0;		//[K] The temperature at which the coolant properties are evaluated. Validated as constant (mjw)
+			c_p_coolant = field_htfProps.Cp(T_coolant_prop)*1000.0;						//[J/kg-K] Specific heat of the coolant
+
+			if (m_use_performance_tables)
 			{
-				m_T_s.at(i) = m_T_s_guess.at(i);
-				m_T_panel_out.at(i) = m_T_panel_out_guess.at(i);
-				// Now do the actual calculations
-				m_T_panel_ave.at(i) = (T_cold_in + m_T_panel_out.at(i)) / 2.0;		//[K] The average coolant temperature in each control volume
-				m_T_film.at(i) = (m_T_s.at(i) + T_amb) / 2.0;					//[K] Film temperature
+				//run from lookup table
+				VectDoub effpos = {m_dot_guess/m_m_dot_htf_des, T_cold_in};
+				double efflookup = m_thermeff_map->interp(effpos);
+
+				q_abs_sum = q_dot_inc_sum * efflookup;
+
+				for (int i = 0; i < m_n_flux_x; i++)
+				{
+					m_q_dot_conv.at(i) = 0.;
+					m_q_dot_rad.at(i) = 0.;
+					m_q_dot_abs.at(i) = q_abs_sum / (double)m_n_flux_x;
+
+					m_T_panel_out_guess.at(i) = T_cold_in + m_q_dot_abs.at(i) / (m_dot*c_p_coolant);	//[K] Energy balance for each node		
+				}
+
 			}
-
-			// Calculate the average surface temperature
-			double T_s_sum = 0.0;
-			for( int i = 0; i < m_n_flux_x; i++ )
-				T_s_sum += m_T_s.at(i);
-			double T_film_ave = (T_amb + m_T_out_target) / 2.0;
-
-			// Convective coefficient for external forced convection using Siebers & Kraabel
-			double k_film = ambient_air.cond(T_film_ave);				//[W/m-K] The conductivity of the ambient air
-			double mu_film = ambient_air.visc(T_film_ave);			//[kg/m-s] Dynamic viscosity of the ambient air
-			double rho_film = ambient_air.dens(T_film_ave, P_amb);	//[kg/m^3] Density of the ambient air
-			double c_p_film = ambient_air.Cp(T_film_ave);				//[kJ/kg-K] Specific heat of the ambient air
-			double Re_for = rho_film*v_wind*m_w_rec / mu_film;			//[-] Reynolds number
-			double ksD = (m_od_tube / 2.0) / m_w_rec;						//[-] The effective roughness of the cylinder [Siebers, Kraabel 1984]
-			double Nusselt_for = CSP::Nusselt_FC(ksD, Re_for);		//[-] S&K
-			double h_for = Nusselt_for*k_film / m_w_rec*m_hl_ffact;		//[W/m^2-K] Forced convection heat transfer coefficient
-
-			// Convection coefficient for external natural convection using Siebers & Kraabel
-			// Note: This relationship applies when the surrounding properties are evaluated at ambient conditions [S&K]
-			double beta = 1.0 / T_amb;												//[1/K] Volumetric expansion coefficient
-			double nu_amb = ambient_air.visc(T_amb) / ambient_air.dens(T_amb, P_amb);	//[m^2/s] Kinematic viscosity		
-
-
-			for( int i = 0; i < m_n_flux_x; i++ )
+			else
 			{
-				// Natural convection
-				double Gr_nat = fmax(0.0, CSP::grav*beta*(m_T_s.at(i) - T_amb)*pow(m_h_rec, 3) / pow(nu_amb, 2));	//[-] Grashof Number at ambient conditions
-				double Nusselt_nat = 0.098*pow(Gr_nat, (1.0 / 3.0))*pow(m_T_s.at(i) / T_amb, -0.14);					//[-] Nusselt number
-				double h_nat = Nusselt_nat*ambient_air.cond(T_amb) / m_h_rec*m_hl_ffact;							//[W/m^-K] Natural convection coefficient
-				// Mixed convection
-				double h_mixed = pow((pow(h_for, m_m_mixed) + pow(h_nat, m_m_mixed)), 1.0 / m_m_mixed)*4.0;			//(4.0) is a correction factor to match convection losses at Solar II (correspondance with G. Kolb, SNL)
-				m_q_dot_conv.at(i) = h_mixed*m_A_node*(m_T_s.at(i) - m_T_film.at(i));							//[W] Convection losses per node
-				// Radiation from the receiver - Calculate the radiation node by node
-				m_q_dot_rad.at(i) = 0.5*CSP::sigma*m_epsilon*m_A_node*(2.0*pow(m_T_s.at(i), 4) - pow(T_amb, 4) - pow(T_sky, 4))*m_hl_ffact;	//[W] Total radiation losses per node
-				m_q_dot_loss.at(i) = m_q_dot_rad.at(i) + m_q_dot_conv.at(i);			//[W] Total overall losses per node
-				m_q_dot_abs.at(i) = m_q_dot_inc.at(i)*1000.0 - m_q_dot_loss.at(i);	//[W] Absorbed flux at each node
-				// Calculate the temperature drop across the receiver tube wall... assume a cylindrical thermal resistance
-				double T_wall = (m_T_s.at(i) + m_T_panel_ave.at(i)) / 2.0;				//[K] The temperature at which the conductivity of the wall is evaluated
-				double k_tube = tube_material.cond(T_wall);								//[W/m-K] The conductivity of the wall
-				double R_tube_wall = m_th_tube / (k_tube*m_A_node);	//[K/W] The thermal resistance of the wall
-				// Calculations for the inside of the tube						
-				double mu_coolant = field_htfProps.visc(T_coolant_prop);					//[kg/m-s] Absolute viscosity of the coolant
-				double k_coolant = field_htfProps.cond(T_coolant_prop);					//[W/m-K] Conductivity of the coolant
-				rho_coolant = field_htfProps.dens(T_coolant_prop, 1.0);			//[kg/m^3] Density of the coolant
-
-				u_coolant = m_dot / (m_n_t*rho_coolant*pow((m_id_tube / 2.0), 2)*CSP::pi);	//[m/s] Average velocity of the coolant through the receiver tubes
-				double Re_inner = rho_coolant*u_coolant*m_id_tube / mu_coolant;				//[-] Reynolds number of internal flow
-				double Pr_inner = c_p_coolant*mu_coolant / k_coolant;							//[-] Prandtl number of internal flow
-				double Nusselt_t;
-				CSP::PipeFlow(Re_inner, Pr_inner, m_LoverD, m_RelRough, Nusselt_t, f);
-				if( Nusselt_t <= 0.0 )
+				//run from a semi-empirical model
+				for( int i = 0; i < m_n_flux_x; i++ )
 				{
-					m_mode = C_csp_collector_receiver::OFF;		// Set the startup mode
-					rec_is_off = true;
-					break;
+					m_T_s.at(i) = m_T_s_guess.at(i);
+					m_T_panel_out.at(i) = m_T_panel_out_guess.at(i);
+					// Now do the actual calculations
+					m_T_panel_ave.at(i) = (T_cold_in + m_T_panel_out.at(i)) / 2.0;		//[K] The average coolant temperature in each control volume
+					m_T_film.at(i) = (m_T_s.at(i) + T_amb) / 2.0;					//[K] Film temperature
 				}
-				double h_inner = Nusselt_t*k_coolant / m_id_tube;								//[W/m^2-K] Convective coefficient between the inner tube wall and the coolant
-				double R_conv_inner = 1.0 / (h_inner*CSP::pi*m_id_tube / 2.0*m_h_rec*m_n_t);	//[K/W] Thermal resistance associated with this value
+
+				// Calculate the average surface temperature
+				double T_s_sum = 0.0;
+				for( int i = 0; i < m_n_flux_x; i++ )
+					T_s_sum += m_T_s.at(i);
+				double T_film_ave = (T_amb + m_T_out_target) / 2.0;
+
+				// Convective coefficient for external forced convection using Siebers & Kraabel
+				double k_film = ambient_air.cond(T_film_ave);				//[W/m-K] The conductivity of the ambient air
+				double mu_film = ambient_air.visc(T_film_ave);			//[kg/m-s] Dynamic viscosity of the ambient air
+				double rho_film = ambient_air.dens(T_film_ave, P_amb);	//[kg/m^3] Density of the ambient air
+				double c_p_film = ambient_air.Cp(T_film_ave);				//[kJ/kg-K] Specific heat of the ambient air
+				double Re_for = rho_film*v_wind*m_w_rec / mu_film;			//[-] Reynolds number
+				double ksD = (m_od_tube / 2.0) / m_w_rec;						//[-] The effective roughness of the cylinder [Siebers, Kraabel 1984]
+				double Nusselt_for = CSP::Nusselt_FC(ksD, Re_for);		//[-] S&K
+				double h_for = Nusselt_for*k_film / m_w_rec*m_hl_ffact;		//[W/m^2-K] Forced convection heat transfer coefficient
+
+				// Convection coefficient for external natural convection using Siebers & Kraabel
+				// Note: This relationship applies when the surrounding properties are evaluated at ambient conditions [S&K]
+				double beta = 1.0 / T_amb;												//[1/K] Volumetric expansion coefficient
+				double nu_amb = ambient_air.visc(T_amb) / ambient_air.dens(T_amb, P_amb);	//[m^2/s] Kinematic viscosity		
 
 
-				m_T_panel_out_guess.at(i) = T_cold_in + m_q_dot_abs.at(i) / (m_dot*c_p_coolant);	//[K] Energy balance for each node																																																
-				m_T_panel_ave_guess.at(i) = (m_T_panel_out_guess.at(i) + T_cold_in) / 2.0;				//[K] Panel average temperature
-				m_T_s_guess.at(i) = m_T_panel_ave_guess.at(i) + m_q_dot_abs.at(i)*(R_conv_inner + R_tube_wall);			//[K] Surface temperature based on the absorbed heat
-
-				if( m_T_s_guess.at(i) < 1.0 )
+				for( int i = 0; i < m_n_flux_x; i++ )
 				{
-					m_mode = C_csp_collector_receiver::OFF;  // Set the startup mode
-					rec_is_off = true;
+					// Natural convection
+					double Gr_nat = fmax(0.0, CSP::grav*beta*(m_T_s.at(i) - T_amb)*pow(m_h_rec, 3) / pow(nu_amb, 2));	//[-] Grashof Number at ambient conditions
+					double Nusselt_nat = 0.098*pow(Gr_nat, (1.0 / 3.0))*pow(m_T_s.at(i) / T_amb, -0.14);					//[-] Nusselt number
+					double h_nat = Nusselt_nat*ambient_air.cond(T_amb) / m_h_rec*m_hl_ffact;							//[W/m^-K] Natural convection coefficient
+					// Mixed convection
+					double h_mixed = pow((pow(h_for, m_m_mixed) + pow(h_nat, m_m_mixed)), 1.0 / m_m_mixed)*4.0;			//(4.0) is a correction factor to match convection losses at Solar II (correspondance with G. Kolb, SNL)
+					m_q_dot_conv.at(i) = h_mixed*m_A_node*(m_T_s.at(i) - m_T_film.at(i));							//[W] Convection losses per node
+					// Radiation from the receiver - Calculate the radiation node by node
+					m_q_dot_rad.at(i) = 0.5*CSP::sigma*m_epsilon*m_A_node*(2.0*pow(m_T_s.at(i), 4) - pow(T_amb, 4) - pow(T_sky, 4))*m_hl_ffact;	//[W] Total radiation losses per node
+					m_q_dot_loss.at(i) = m_q_dot_rad.at(i) + m_q_dot_conv.at(i);			//[W] Total overall losses per node
+					m_q_dot_abs.at(i) = m_q_dot_inc.at(i)*1000.0 - m_q_dot_loss.at(i);	//[W] Absorbed flux at each node
+					// Calculate the temperature drop across the receiver tube wall... assume a cylindrical thermal resistance
+					double T_wall = (m_T_s.at(i) + m_T_panel_ave.at(i)) / 2.0;				//[K] The temperature at which the conductivity of the wall is evaluated
+					double k_tube = tube_material.cond(T_wall);								//[W/m-K] The conductivity of the wall
+					double R_tube_wall = m_th_tube / (k_tube*m_A_node);	//[K/W] The thermal resistance of the wall
+					// Calculations for the inside of the tube						
+					double mu_coolant = field_htfProps.visc(T_coolant_prop);					//[kg/m-s] Absolute viscosity of the coolant
+					double k_coolant = field_htfProps.cond(T_coolant_prop);					//[W/m-K] Conductivity of the coolant
+					rho_coolant = field_htfProps.dens(T_coolant_prop, 1.0);			//[kg/m^3] Density of the coolant
+
+					u_coolant = m_dot / (m_n_t*rho_coolant*pow((m_id_tube / 2.0), 2)*CSP::pi);	//[m/s] Average velocity of the coolant through the receiver tubes
+					double Re_inner = rho_coolant*u_coolant*m_id_tube / mu_coolant;				//[-] Reynolds number of internal flow
+					double Pr_inner = c_p_coolant*mu_coolant / k_coolant;							//[-] Prandtl number of internal flow
+					double Nusselt_t;
+					CSP::PipeFlow(Re_inner, Pr_inner, m_LoverD, m_RelRough, Nusselt_t, f);
+					if( Nusselt_t <= 0.0 )
+					{
+						m_mode = C_csp_collector_receiver::OFF;		// Set the startup mode
+						rec_is_off = true;
+						break;
+					}
+					double h_inner = Nusselt_t*k_coolant / m_id_tube;								//[W/m^2-K] Convective coefficient between the inner tube wall and the coolant
+					double R_conv_inner = 1.0 / (h_inner*CSP::pi*m_id_tube / 2.0*m_h_rec*m_n_t);	//[K/W] Thermal resistance associated with this value
+
+
+					m_T_panel_out_guess.at(i) = T_cold_in + m_q_dot_abs.at(i) / (m_dot*c_p_coolant);	//[K] Energy balance for each node																																																
+					m_T_panel_ave_guess.at(i) = (m_T_panel_out_guess.at(i) + T_cold_in) / 2.0;				//[K] Panel average temperature
+					m_T_s_guess.at(i) = m_T_panel_ave_guess.at(i) + m_q_dot_abs.at(i)*(R_conv_inner + R_tube_wall);			//[K] Surface temperature based on the absorbed heat
+
+					if( m_T_s_guess.at(i) < 1.0 )
+					{
+						m_mode = C_csp_collector_receiver::OFF;  // Set the startup mode
+						rec_is_off = true;
+					}
 				}
+
 			}
 
 			if( rec_is_off )
@@ -535,7 +557,6 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 			for( int j = 0; j < m_n_flux_x; j++ )
 				T_hot_guess += m_T_panel_out_guess.at(j);		//[K] Update the calculated hot salt outlet temp
 			T_hot_guess /= (double)m_n_flux_x;
-
 			
 			//Calculate outlet temperature after piping losses
 			if( m_Q_dot_piping_loss > 0.0 )
@@ -707,7 +728,7 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 		}	// End switch() on input_operation_mode
 
 		// Pressure drop calculations
-        calc_receiver_presdrop(rho_coolant, m_dot_tot, f, Pres_D);
+        calc_receiver_presdrop(m_dot_tot, htf_state_in.m_pres, Pres_D);
 
 		q_thermal = m_dot_tot*c_p_coolant*(T_hot_guess - T_cold_in);
 		q_thermal_ss = m_dot_salt_tot_ss*c_p_coolant*(T_hot_guess - T_cold_in);
@@ -751,7 +772,7 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 		m_od_control = 1.0;		//[-]
 	}
 
-	ms_outputs.m_m_dot_salt_tot = m_dot_tot*3600.0;		//[kg/hr] convert from kg/s
+	ms_outputs.m_m_dot_tot = m_dot_tot*3600.0;		//[kg/hr] convert from kg/s
 	ms_outputs.m_eta_therm = eta_therm;							//[-] RECEIVER thermal efficiency (includes radiation and convective losses. reflection losses are contained in receiver flux model)
 	ms_outputs.m_W_dot_pump = W_dot_pump / 1.E6;				//[MW] convert from W
 	ms_outputs.m_q_conv_sum = q_conv_sum / 1.E6;				//[MW] convert from W
@@ -765,7 +786,7 @@ void C_gen3gas_receiver::call(const C_csp_weatherreader::S_outputs &weather,
 	ms_outputs.m_dP_receiver = DELTAP / 1.E5;	//[bar] receiver pressure drop, convert from Pa
 	ms_outputs.m_dP_total = Pres_D*10.0;						//[bar] total pressure drop, convert from MPa
 	ms_outputs.m_vel_htf = u_coolant;							//[m/s]
-	ms_outputs.m_T_salt_cold = T_cold_in - 273.15;			//[C] convert from K
+	ms_outputs.m_T_htf_cold = T_cold_in - 273.15;			//[C] convert from K
 	ms_outputs.m_m_dot_ss = m_dot_salt_tot_ss*3600.0;			//[kg/hr] convert from kg/s
 	ms_outputs.m_q_dot_ss = q_thermal_ss / 1.E6;				//[MW] convert from W
 	ms_outputs.m_f_timestep = f_rec_timestep;					//[-]
@@ -786,7 +807,7 @@ void C_gen3gas_receiver::off(const C_csp_weatherreader::S_outputs &weather,
 	m_mode = C_csp_collector_receiver::OFF;
 
 	// Assuming no night recirculation, so... these should be zero
-	ms_outputs.m_m_dot_salt_tot = 0.0;		//[kg/hr] convert from kg/s
+	ms_outputs.m_m_dot_tot = 0.0;		//[kg/hr] convert from kg/s
 	ms_outputs.m_eta_therm = 0.0;			//[-] RECEIVER thermal efficiency (includes radiation and convective losses. reflection losses are contained in receiver flux model)
 	ms_outputs.m_W_dot_pump = 0.0;			//[MW] convert from W
 	ms_outputs.m_q_conv_sum = 0.0;			//[MW] convert from W
@@ -800,7 +821,7 @@ void C_gen3gas_receiver::off(const C_csp_weatherreader::S_outputs &weather,
 	ms_outputs.m_dP_receiver = 0.0;			//[bar] receiver pressure drop, convert from Pa
 	ms_outputs.m_dP_total = 0.0;			//[bar] total pressure drop, convert from MPa
 	ms_outputs.m_vel_htf = 0.0;				//[m/s]
-	ms_outputs.m_T_salt_cold = 0.0;			//[C] convert from K
+	ms_outputs.m_T_htf_cold = 0.0;			//[C] convert from K
 	ms_outputs.m_m_dot_ss = 0.0;			//[kg/hr] convert from kg/s
 	ms_outputs.m_q_dot_ss = 0.0;			//[MW] convert from W
 	ms_outputs.m_f_timestep = 0.0;			//[-]
@@ -847,7 +868,7 @@ int C_gen3gas_receiver::get_operating_state()
 
 void C_gen3gas_receiver::clear_outputs()
 {
-	ms_outputs.m_m_dot_salt_tot = 
+	ms_outputs.m_m_dot_tot = 
 		ms_outputs.m_eta_therm = 
 		ms_outputs.m_W_dot_pump = 
 		ms_outputs.m_q_conv_sum = 
@@ -861,17 +882,18 @@ void C_gen3gas_receiver::clear_outputs()
 		ms_outputs.m_dP_receiver = 
 		ms_outputs.m_dP_total =
 		ms_outputs.m_vel_htf = 
-		ms_outputs.m_T_salt_cold = 
+		ms_outputs.m_T_htf_cold = 
 		ms_outputs.m_m_dot_ss = 
 		ms_outputs.m_q_dot_ss = 
 		ms_outputs.m_f_timestep = std::numeric_limits<double>::quiet_NaN();
 }
 
-void C_gen3gas_receiver::calc_receiver_presdrop(double rho_f, double mdot, double ffact, double &PresDrop_calc)
+void C_gen3gas_receiver::calc_receiver_presdrop(double mdot, double P_in, double &PresDrop_calc)
 {
-
     // Pressure drop calculations
-
+	VectDoub x = { mdot, P_in };
+	
+	PresDrop_calc = m_presdrop_map->interp(x);
 }
 
 HTFProperties *C_gen3gas_receiver::get_htf_property_object()

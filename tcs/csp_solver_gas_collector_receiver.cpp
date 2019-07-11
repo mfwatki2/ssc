@@ -114,35 +114,6 @@ double C_csp_gas_collector_receiver::get_startup_energy() //MWh
 double C_csp_gas_collector_receiver::get_pumping_parasitic_coef()  //MWe/MWt
 {
 	return 0.;
- //   HTFProperties *htf = mc_gen3gas_receiver.get_htf_property_object();
-
- //   C_gen3gas_receiver *R = &mc_gen3gas_receiver;
-
- //   double Tavg = (R->m_T_htf_cold_des + R->m_T_htf_hot_des)/2.;
-
- //   double mu_coolant = htf->visc(Tavg);					//[kg/m-s] Absolute viscosity of the coolant
-	//double k_coolant = htf->cond(Tavg);					//[W/m-K] Conductivity of the coolant
-	//double rho_coolant = htf->dens(Tavg, 1.0);			//[kg/m^3] Density of the coolant
- //   double c_p_coolant = htf->Cp(Tavg)*1e3;                 //[J/kg-K] Specific heat
-
- //   double m_dot_salt = R->m_q_rec_des / (c_p_coolant * (R->m_T_htf_hot_des - R->m_T_htf_cold_des) );
-
-	//double n_t = (int)(CSP::pi*R->m_d_rec / (R->m_od_tube*R->m_n_panels));	// The number of tubes per panel, as a function of the number of panels and the desired diameter of the receiver
-	//double id_tube = R->m_od_tube - 2 * R->m_th_tube;			//[m] Inner diameter of receiver tube
-
-
-	//double u_coolant = m_dot_salt / (n_t*rho_coolant*pow((id_tube / 2.0), 2)*CSP::pi);	//[m/s] Average velocity of the coolant through the receiver tubes
-	//double Re_inner = rho_coolant*u_coolant*id_tube / mu_coolant;				//[-] Reynolds number of internal flow
-	//double Pr_inner = c_p_coolant*mu_coolant / k_coolant;							//[-] Prandtl number of internal flow
-	//double Nusselt_t, f;
- //   double LoverD = R->m_h_rec / id_tube;
-	//double RelRough = (4.5e-5) / id_tube;	//[-] Relative roughness of the tubes. http:www.efunda.com/formulae/fluids/roughness.cfm
-	//CSP::PipeFlow(Re_inner, Pr_inner, LoverD, RelRough, Nusselt_t, f);
-
- //   double deltap, wdot;
- //   mc_gen3gas_receiver.calc_pump_performance(rho_coolant, m_dot_salt, f, deltap, wdot );
-
- //   return wdot / R->m_q_rec_des;
 }
 
 double C_csp_gas_collector_receiver::get_min_power_delivery()    //MWt
@@ -206,7 +177,6 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 	{
 		cr_out_solver.m_q_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;				//[MW]
 		cr_out_solver.m_q_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup;				//[MWt-hr]
-		cr_out_solver.m_m_dot_salt_tot += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;		//[kg/hr]
 		cr_out_solver.m_T_salt_hot += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;				//[C]
 		cr_out_solver.m_component_defocus += mc_gen3gas_receivers.at(i).ms_outputs.m_component_defocus;	//[-]
 		cr_out_solver.m_W_dot_htf_pump += mc_gen3gas_receivers.at(i).ms_outputs.m_W_dot_pump;			//[MWe]
@@ -216,12 +186,13 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 		q_dot_inc += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_rec_inc;
 		eta_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_eta_therm*mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
 		q_dot_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
-		m_dot_htf += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;
 		q_dot_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup / (mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su / 3600.0);
 		T_htf_out += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;
 		q_dot_pipe_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_piping_loss;
 		q_dot_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_rad_sum + mc_gen3gas_receivers.at(i).ms_outputs.m_q_conv_sum;
 	}
+	//The "total" mass flow is the max flow through the system, and this is governed by the first (north) receiver
+	m_dot_htf = cr_out_solver.m_m_dot_salt_tot = mc_gen3gas_receivers.front().ms_outputs.m_m_dot_tot;		//[kg/hr]
 
 	eta_thermal /= q_dot_thermal; //weighted efficiency
 
@@ -277,7 +248,6 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 
 		cr_out_solver.m_q_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;				//[MW]
 		cr_out_solver.m_q_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup;				//[MWt-hr]
-		cr_out_solver.m_m_dot_salt_tot += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;		//[kg/hr]
 		cr_out_solver.m_T_salt_hot += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;				//[C]
 		cr_out_solver.m_W_dot_htf_pump += mc_gen3gas_receivers.at(i).ms_outputs.m_W_dot_pump;			//[MWe]
 		cr_out_solver.m_time_required_su = std::fmax(cr_out_solver.m_time_required_su, mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su);	//[s]
@@ -285,12 +255,14 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 		q_dot_inc += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_rec_inc;
 		eta_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_eta_therm*mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
 		q_dot_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
-		m_dot_htf += mc_gen3gas_receivers.at(i).ms_outputs.m_m_dot_salt_tot;
 		q_dot_startup += mc_gen3gas_receivers.at(i).ms_outputs.m_q_startup / (mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su / 3600.0);
 		T_htf_out += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;
 		q_dot_pipe_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_piping_loss;
 		q_dot_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_rad_sum + mc_gen3gas_receivers.at(i).ms_outputs.m_q_conv_sum;
 	}
+
+	//The "total" mass flow is the max flow through the system, and this is governed by the first (north) receiver
+	m_dot_htf = cr_out_solver.m_m_dot_salt_tot = mc_gen3gas_receivers.front().ms_outputs.m_m_dot_tot;		//[kg/hr]
 
 	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc);	//[MWt]
 	mc_reported_outputs.value(E_FIELD_ETA_OPT, mc_pt_heliostatfield.ms_outputs.m_eta_field);			//[-]
