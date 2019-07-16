@@ -60,7 +60,7 @@ class C_csp_gas_collector_receiver : public C_csp_collector_receiver
 {
 
 private:
-	C_pt_sf_perf_interp &mc_pt_heliostatfield;
+	std::vector<C_pt_sf_perf_interp> &mc_pt_heliostatfields;
 	std::vector<C_gen3gas_receiver> &mc_gen3gas_receivers;
 
 public:
@@ -84,8 +84,10 @@ public:
 	
 	C_csp_reported_outputs mc_reported_outputs;
 	
-	C_csp_gas_collector_receiver(C_pt_sf_perf_interp & pt_heliostatfield,
-		std::vector<C_gen3gas_receiver> & mspt_gen3gas_receivers);
+	C_csp_gas_collector_receiver(
+		std::vector<C_pt_sf_perf_interp> & pt_heliostatfields,
+		std::vector<C_gen3gas_receiver> & mspt_gen3gas_receivers
+	);
 
 	~C_csp_gas_collector_receiver();
 

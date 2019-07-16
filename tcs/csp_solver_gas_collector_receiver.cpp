@@ -70,9 +70,11 @@ static C_csp_reported_outputs::S_output_info S_output_info[] =
 	csp_info_invalid	
 };
 
-C_csp_gas_collector_receiver::C_csp_gas_collector_receiver(C_pt_sf_perf_interp & pt_heliostatfield,
-	std::vector<C_gen3gas_receiver> & gen3gas_receivers):
-	mc_pt_heliostatfield(pt_heliostatfield),
+C_csp_gas_collector_receiver::C_csp_gas_collector_receiver(
+	std::vector<C_pt_sf_perf_interp> & pt_heliostatfields,
+	std::vector<C_gen3gas_receiver> & gen3gas_receivers
+):
+	mc_pt_heliostatfields(pt_heliostatfields),
 	mc_gen3gas_receivers(gen3gas_receivers)
 {
 	mc_reported_outputs.construct(S_output_info);
@@ -84,14 +86,23 @@ C_csp_gas_collector_receiver::~C_csp_gas_collector_receiver()
 void C_csp_gas_collector_receiver::init(const C_csp_collector_receiver::S_csp_cr_init_inputs init_inputs, 
 				C_csp_collector_receiver::S_csp_cr_solved_params & solved_params)
 {
-	mc_pt_heliostatfield.init();
+	
+	if(mc_pt_heliostatfields.size() != mc_gen3gas_receivers.size())
+		throw(C_csp_exception("The number of heliostat fields and receivers supplied to the model must be equal.", "Gas receiver"));
+
+	
 	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+	{
+		mc_pt_heliostatfields.at(i).init();
 		mc_gen3gas_receivers.at(i).init();
+	}
 
 	solved_params.m_T_htf_cold_des = mc_gen3gas_receivers.front().m_T_cold_des;			//[K]
 	solved_params.m_q_dot_rec_des = mc_gen3gas_receivers.front().m_q_rec_des / 1.E6;		//[MW]
 
-	solved_params.m_A_aper_total = mc_pt_heliostatfield.ms_params.m_A_sf;			//[m^2]
+	solved_params.m_A_aper_total = 0.;
+	for (size_t i = 0; i < mc_pt_heliostatfields.size(); i++)
+		solved_params.m_A_aper_total += mc_pt_heliostatfields.at(i).ms_params.m_A_sf;			//[m^2]
 
 	return;
 }
@@ -124,12 +135,18 @@ double C_csp_gas_collector_receiver::get_min_power_delivery()    //MWt
 
 double C_csp_gas_collector_receiver::get_tracking_power()
 {
-	return mc_pt_heliostatfield.ms_params.m_p_track * mc_pt_heliostatfield.ms_params.m_N_hel*1.e-3;	//MWe
+	double track_tot = 0.;
+	for (size_t i = 0; i < mc_pt_heliostatfields.size(); i++)
+		track_tot += mc_pt_heliostatfields.at(i).ms_params.m_p_track * mc_pt_heliostatfields.at(i).ms_params.m_N_hel*1.e-3;	//MWe
+	return track_tot;
 }
 
 double C_csp_gas_collector_receiver::get_col_startup_power()
 {
-	return mc_pt_heliostatfield.ms_params.m_p_start * mc_pt_heliostatfield.ms_params.m_N_hel *1.e-3;	//MWe-hr
+	double start_tot = 0.;
+	for (size_t i = 0; i < mc_pt_heliostatfields.size(); i++)
+		start_tot += mc_pt_heliostatfields.at(i).ms_params.m_p_start * mc_pt_heliostatfields.at(i).ms_params.m_N_hel*1.e-3;	//MWe
+	return start_tot;
 }
 
 
@@ -140,22 +157,23 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 	//C_csp_collector_receiver::S_csp_cr_out_report &cr_out_report,
 	const C_csp_solver_sim_info &sim_info)
 {
-	// What about catching errors here?
-	
 	// First call heliostat field class: 'csp_solver_pt_heliostat'
 	// Then use its outputs as inputs to receiver class: 'csp_solver_mspt_receiver_222'
 
 	// Set heliostat field call() parameters and solve
 	double heliostat_field_control = inputs.m_field_control;
-	mc_pt_heliostatfield.call(weather, heliostat_field_control, sim_info);
+	for (size_t i = 0; i < mc_pt_heliostatfields.size(); i++)
+		mc_pt_heliostatfields.at(i).call(weather, heliostat_field_control, sim_info);
 
 	// Get heliostat field outputs and set corresponding receiver inputs
-	C_gen3gas_receiver::S_inputs receiver_inputs;
-	receiver_inputs.m_field_eff = mc_pt_heliostatfield.ms_outputs.m_eta_field;
-	receiver_inputs.m_input_operation_mode = inputs.m_input_operation_mode;
-	receiver_inputs.m_flux_map_input = &mc_pt_heliostatfield.ms_outputs.m_flux_map_out;
-	for(size_t i=0; i<mc_gen3gas_receivers.size(); i++)
+	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+	{
+		C_gen3gas_receiver::S_inputs receiver_inputs;
+		receiver_inputs.m_field_eff = mc_pt_heliostatfields.at(i).ms_outputs.m_eta_field;
+		receiver_inputs.m_input_operation_mode = inputs.m_input_operation_mode;
+		receiver_inputs.m_flux_map_input = &mc_pt_heliostatfields.at(i).ms_outputs.m_flux_map_out;
 		mc_gen3gas_receivers.at(i).call(weather, htf_state_in, receiver_inputs, sim_info);
+	}
 		
 	// Set collector/receiver parent class outputs and return
 	cr_out_solver.m_q_thermal = 0.;				//[MW]
@@ -171,7 +189,7 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 
 	double q_dot_inc = 0, eta_thermal = 0., q_dot_thermal = 0., m_dot_htf = 0., 
 			q_dot_startup = 0., T_htf_in = 0., T_htf_out = 0., q_dot_pipe_loss = 0., 
-			q_dot_loss = 0.;
+			q_dot_loss = 0., q_dot_field_inc = 0., eta_field=0., sf_adjust_out=0.;
 
 	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
 	{
@@ -180,7 +198,7 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 		cr_out_solver.m_T_salt_hot += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;				//[C]
 		cr_out_solver.m_component_defocus += mc_gen3gas_receivers.at(i).ms_outputs.m_component_defocus;	//[-]
 		cr_out_solver.m_W_dot_htf_pump += mc_gen3gas_receivers.at(i).ms_outputs.m_W_dot_pump;			//[MWe]
-		cr_out_solver.m_W_dot_col_tracking += mc_pt_heliostatfield.ms_outputs.m_pparasi;		//[MWe]
+		cr_out_solver.m_W_dot_col_tracking += mc_pt_heliostatfields.at(i).ms_outputs.m_pparasi;		//[MWe]
 		cr_out_solver.m_time_required_su = std::fmax(cr_out_solver.m_time_required_su, mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su);	//[s]
 
 		q_dot_inc += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_rec_inc;
@@ -190,15 +208,20 @@ void C_csp_gas_collector_receiver::call(const C_csp_weatherreader::S_outputs &we
 		T_htf_out += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;
 		q_dot_pipe_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_piping_loss;
 		q_dot_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_rad_sum + mc_gen3gas_receivers.at(i).ms_outputs.m_q_conv_sum;
+		q_dot_field_inc += mc_pt_heliostatfields.at(i).ms_outputs.m_q_dot_field_inc;
+		eta_field += mc_pt_heliostatfields.at(i).ms_outputs.m_eta_field * mc_pt_heliostatfields.at(i).ms_outputs.m_q_dot_field_inc;
+		sf_adjust_out += mc_pt_heliostatfields.at(i).ms_outputs.m_sf_adjust_out * mc_pt_heliostatfields.at(i).ms_outputs.m_q_dot_field_inc;
 	}
 	//The "total" mass flow is the max flow through the system, and this is governed by the first (north) receiver
 	m_dot_htf = cr_out_solver.m_m_dot_salt_tot = mc_gen3gas_receivers.front().ms_outputs.m_m_dot_tot;		//[kg/hr]
 
 	eta_thermal /= q_dot_thermal; //weighted efficiency
+	eta_field /= q_dot_field_inc;
+	sf_adjust_out /= q_dot_field_inc;
 
-	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc);	//[MWt]
-	mc_reported_outputs.value(E_FIELD_ETA_OPT, mc_pt_heliostatfield.ms_outputs.m_eta_field);			//[-]
-	mc_reported_outputs.value(E_FIELD_ADJUST, mc_pt_heliostatfield.ms_outputs.m_sf_adjust_out);			//[-]
+	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, q_dot_field_inc);	//[MWt]
+	mc_reported_outputs.value(E_FIELD_ETA_OPT, eta_field);			//[-]
+	mc_reported_outputs.value(E_FIELD_ADJUST, sf_adjust_out);			//[-]
 
 	mc_reported_outputs.value(E_Q_DOT_INC, q_dot_inc);	//[MWt]
 	mc_reported_outputs.value(E_ETA_THERMAL, eta_thermal);		//[-]
@@ -220,12 +243,13 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 {
 	// First call heliostat field class
 	// In OFF call, looking specifically for weather STOW parasitics apply
-	mc_pt_heliostatfield.off(sim_info);
+	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+		mc_pt_heliostatfields.at(i).off(sim_info);
 
 	// Set collector/receiver parent class outputs from field model
-	cr_out_solver.m_W_dot_col_tracking = mc_pt_heliostatfield.ms_outputs.m_pparasi;			//[MWe]
 	cr_out_solver.m_component_defocus = 1.0;	//[-]
 
+	cr_out_solver.m_W_dot_col_tracking = 0.;	//[MWe]
 	cr_out_solver.m_q_thermal = 0.;				//[MW]
 	cr_out_solver.m_q_startup = 0.;				//[MWt-hr]
 	cr_out_solver.m_m_dot_salt_tot = 0.;		//[kg/hr]
@@ -239,7 +263,7 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 
 	double q_dot_inc = 0, eta_thermal = 0., q_dot_thermal = 0., m_dot_htf = 0.,
 		q_dot_startup = 0., T_htf_in = 0., T_htf_out = 0., q_dot_pipe_loss = 0.,
-		q_dot_loss = 0.;
+		q_dot_loss = 0., q_dot_field_inc = 0., eta_field = 0., sf_adjust_out = 0.;
 
 	// Set collector/receiver parent class outputs from field model
 	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
@@ -251,6 +275,7 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 		cr_out_solver.m_T_salt_hot += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;				//[C]
 		cr_out_solver.m_W_dot_htf_pump += mc_gen3gas_receivers.at(i).ms_outputs.m_W_dot_pump;			//[MWe]
 		cr_out_solver.m_time_required_su = std::fmax(cr_out_solver.m_time_required_su, mc_gen3gas_receivers.at(i).ms_outputs.m_time_required_su);	//[s]
+		cr_out_solver.m_W_dot_col_tracking += mc_pt_heliostatfields.at(i).ms_outputs.m_pparasi;
 
 		q_dot_inc += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_rec_inc;
 		eta_thermal += mc_gen3gas_receivers.at(i).ms_outputs.m_eta_therm*mc_gen3gas_receivers.at(i).ms_outputs.m_Q_thermal;
@@ -259,14 +284,17 @@ void C_csp_gas_collector_receiver::off(const C_csp_weatherreader::S_outputs &wea
 		T_htf_out += mc_gen3gas_receivers.at(i).ms_outputs.m_T_salt_hot*norm;
 		q_dot_pipe_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_dot_piping_loss;
 		q_dot_loss += mc_gen3gas_receivers.at(i).ms_outputs.m_q_rad_sum + mc_gen3gas_receivers.at(i).ms_outputs.m_q_conv_sum;
+		q_dot_field_inc += mc_pt_heliostatfields.at(i).ms_outputs.m_q_dot_field_inc;
+		eta_field += mc_pt_heliostatfields.at(i).ms_outputs.m_eta_field * mc_pt_heliostatfields.at(i).ms_outputs.m_q_dot_field_inc;
+		sf_adjust_out += mc_pt_heliostatfields.at(i).ms_outputs.m_sf_adjust_out * mc_pt_heliostatfields.at(i).ms_outputs.m_q_dot_field_inc;
 	}
 
 	//The "total" mass flow is the max flow through the system, and this is governed by the first (north) receiver
 	m_dot_htf = cr_out_solver.m_m_dot_salt_tot = mc_gen3gas_receivers.front().ms_outputs.m_m_dot_tot;		//[kg/hr]
 
-	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, mc_pt_heliostatfield.ms_outputs.m_q_dot_field_inc);	//[MWt]
-	mc_reported_outputs.value(E_FIELD_ETA_OPT, mc_pt_heliostatfield.ms_outputs.m_eta_field);			//[-]
-	mc_reported_outputs.value(E_FIELD_ADJUST, mc_pt_heliostatfield.ms_outputs.m_sf_adjust_out);			//[-]
+	mc_reported_outputs.value(E_FIELD_Q_DOT_INC, q_dot_field_inc);	//[MWt]
+	mc_reported_outputs.value(E_FIELD_ETA_OPT, eta_field);			//[-]
+	mc_reported_outputs.value(E_FIELD_ADJUST, sf_adjust_out);			//[-]
 
 	mc_reported_outputs.value(E_Q_DOT_INC, q_dot_inc);	//[MWt]
 	mc_reported_outputs.value(E_ETA_THERMAL, eta_thermal);		//[-]
@@ -355,19 +383,25 @@ double C_csp_gas_collector_receiver::calculate_optical_efficiency( const C_csp_w
     Evaluate optical efficiency. This is a required function for the parent class, 
     but doesn't do much other than simply call the optical efficiency model in this case.
     */
+	
+	double eta_field_ave = 0.;
 
-    mc_pt_heliostatfield.call(weather, 1., sim );
+	for (size_t i = 0; i < mc_pt_heliostatfields.size(); i++)
+	{
+		mc_pt_heliostatfields.at(i).call(weather, 1., sim );
+		eta_field_ave += mc_pt_heliostatfields.at(i).ms_outputs.m_eta_field;
+	}
 
-    return mc_pt_heliostatfield.ms_outputs.m_eta_field;
+	return eta_field_ave / (double)mc_pt_heliostatfields.size();
 }
 
 double C_csp_gas_collector_receiver::get_collector_area()
 {
-    //C_pt_heliostatfield::S_params *p = &mc_pt_heliostatfield.ms_params;
+	double A_sf_tot = 0.;
+	for (size_t i = 0; i < mc_pt_heliostatfields.size(); i++)
+		A_sf_tot += mc_pt_heliostatfields.at(i).ms_params.m_A_sf;
 
-    //return p->m_dens_mirror * p->m_helio_height * p->m_helio_width * (double)p->m_helio_positions.nrows();
-
-    return mc_gen3gas_receivers.front().m_A_sf;
+	return A_sf_tot;
 }
 
 double C_csp_gas_collector_receiver::calculate_thermal_efficiency_approx( const C_csp_weatherreader::S_outputs &weather, double q_inc )
@@ -403,9 +437,11 @@ double C_csp_gas_collector_receiver::calculate_thermal_efficiency_approx( const 
 
 void C_csp_gas_collector_receiver::converged()
 {
-	mc_pt_heliostatfield.converged();
 	for (size_t i = 0; i < mc_gen3gas_receivers.size(); i++)
+	{
+		mc_pt_heliostatfields.at(i).converged();
 		mc_gen3gas_receivers.at(i).converged();
+	}
 
 	// Hardcode to test...
 	//mc_reported_outputs.set_timestep_output(E_Q_DOT_THERMAL, mc_gen3gas_receiver.ms_outputs.m_Q_thermal);	//[MWt]

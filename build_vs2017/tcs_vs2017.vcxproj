@@ -18,7 +18,9 @@
     <ClCompile Include="..\tcs\csp_radiator.cpp" />
     <ClCompile Include="..\tcs\csp_solver_core.cpp" />
     <ClCompile Include="..\tcs\csp_solver_gas.cpp" />
+    <ClCompile Include="..\tcs\csp_solver_gasparticle_tes.cpp" />
     <ClCompile Include="..\tcs\csp_solver_gas_collector_receiver.cpp" />
+    <ClCompile Include="..\tcs\csp_solver_gas_mono_eq_methods.cpp" />
     <ClCompile Include="..\tcs\csp_solver_gas_receiver.cpp" />
     <ClCompile Include="..\tcs\csp_solver_gen_collector_receiver.cpp" />
     <ClCompile Include="..\tcs\csp_solver_lf_dsg_collector_receiver.cpp" />
@@ -106,6 +108,7 @@
     <ClInclude Include="..\tcs\csp_radiator.h" />
     <ClInclude Include="..\tcs\csp_solver_core.h" />
     <ClInclude Include="..\tcs\csp_solver_gas.h" />
+    <ClInclude Include="..\tcs\csp_solver_gasparticle_tes.h" />
     <ClInclude Include="..\tcs\csp_solver_gas_collector_receiver.h" />
     <ClInclude Include="..\tcs\csp_solver_gas_receiver.h" />
     <ClInclude Include="..\tcs\csp_solver_gen_collector_receiver.h" />

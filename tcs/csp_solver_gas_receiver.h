@@ -127,22 +127,20 @@ public:
 	double m_th_tube;				//[mm], convert to [m] in init()
 	double m_epsilon;				//[-]
 	double m_hl_ffact;				//[-]
-	double m_T_hot_des;			//[C], convert to [K] in init()
-	double m_T_cold_des;		//[C], convert to [K] in init()
+    int m_mat_tube;
+    double m_T_hot_des;			    //[C], convert to [K] in init()
+	double m_T_cold_des;	    	//[C], convert to [K] in init()
 	double m_f_rec_min;				//[-]
 	double m_q_rec_des;				//[MW], convert to [W] in init()
 	double m_rec_su_delay;			//[-]
 	double m_rec_qf_delay;			//[-]
-	double m_m_dot_max_frac;	//[-]
-	double m_A_sf;					//[m2]
+	double m_m_dot_max_frac;	    //[-]
+    double m_m_dot_htf_max;			//[kg/s]
+    double m_A_sf;					//[m2]
 
-	// 8.10.2015 twn: add tower piping thermal losses to receiver performance
 	double m_pipe_loss_per_m;		//[Wt/m]
 	double m_pipe_length_add;		//[m]
 	double m_pipe_length_mult;		//[-]
-
-	// 7.13.17 twn: keep this public for now so iscc can calculate
-	double m_m_dot_htf_max;			//[kg/s]
 
 	int m_n_flux_x;
 	int m_n_flux_y;
@@ -151,9 +149,6 @@ public:
 	double m_q_dot_inc_min;			//[Wt]
 	double m_T_out_target;			//[C], convert to K in init() call
 	double m_hel_stow_deploy;			//[-]
-
-	util::matrix_t<double> m_field_fl_props;	
-	int m_mat_tube;
 
 	GaussMarkov *m_presdrop_map;
 	GaussMarkov *m_thermeff_map;

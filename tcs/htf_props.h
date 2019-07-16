@@ -64,6 +64,7 @@ public:
 		Therminol_66,
 		Therminol_59,
 		Pressurized_Water,
+        Spherical_silica,
 		End_Library_Fluids,
 		User_defined = 50
 	};

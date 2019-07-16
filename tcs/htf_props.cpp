@@ -285,6 +285,8 @@ double HTFProperties::Cp( double T_K )
 		return 0.0033*T_C + 1.6132;
 	case Pressurized_Water:
 		return 1.E-5*T_C*T_C - 0.0014*T_C + 4.2092;
+    case Spherical_silica:
+        return 1.155*.61;         //61% bulk solid fraction (39% void)
 	case User_defined:
 		{
 			if ( m_userTable.nrows() < 3 ) return std::numeric_limits<double>::quiet_NaN();
@@ -364,6 +366,8 @@ double HTFProperties::dens(double T_K, double P)
 			return -0.0003*T_C*T_C - 0.6963*T_C + 988.44;
 		case Pressurized_Water:
 			return -0.0023*T_C*T_C - 0.2337*T_C + 1005.6;
+        case Spherical_silica:
+            return 2650.*.61;         //61% bulk solid fraction (39% void)
 		case User_defined:
 			if ( m_userTable.nrows() < 3 )
 						return std::numeric_limits<double>::quiet_NaN();
@@ -527,6 +531,8 @@ double HTFProperties::cond(double T_K)
 		return -1.E-7*T_C*T_C - 6.E-5*T_C + 0.1227;
 	case Pressurized_Water:
 		return -6.E-6*T_C*T_C + 0.0016*T_C*T_C + 0.5631;
+    case Spherical_silica:
+        return 3.28e-7*T_C*T_C + 2.11e-4*T_C + 0.314;       //UW measurements
 	case User_defined:
 		if ( m_userTable.nrows() < 3 )
 					return std::numeric_limits<double>::quiet_NaN();
@@ -673,3 +679,22 @@ double HTFProperties::Re(double T_K, double P, double vel, double d)
 	double Re_num = dens(T_K, P) * vel * d / visc(T_K);
 	return Re_num;
 }
+
+
+/* 
+Some quick info for the spherical silica
+
+D_s =			3e-4			[m]				"diameter of solid particles, source: 'Analytic Particle HX Model - 10-2018 - rev03pd.xlsm' "
+beta =			0.95			[-]				"dimensionless constant = l_p / D_s, where l_p is the effective length between the centers"
+gamma =			1			[-]				"dimensionless constant = l_s / D_s, where l_s is the effective length of solid relating to thermal conduction"
+phi =			0.034		[-]				"dimensionless constant = l_v / D_s, where l_s is the effective thickness of fluid film adjacent to "
+" ->											  contact surface of two solid particles, all sourced from Yagi et al 1957, for iron sphere geometry"
+k_s =			2			[W/m-K]			"single particle material conductivity of sintered bauxite, source: 'Albrecht and Ho - draft' "
+rho_s_p =		2650		[kg/m3]			"average density of solid single particles (not bulk), source: 'HX_test_details.xlsx' "
+epsilon_s =		0.39			[-]				"solid particle bulk voidage, or bulk void fraction, = V_void / V_total, source: Yagi et al 1957, average for sand"
+a =				0			[m]				"heat transfer surface curvature"
+cp_s =			1.155		[kJ/kg-K]			"specific heat of solid single particles (not bulk), source: 'HX_test_details.xlsx' "
+epsilon_p =		0.65			[-]				"molecular emissivity of solid particles"
+epsilon_mat =		0.15			[-]				"emissivity of Inconel 625 wall material"
+
+*/
