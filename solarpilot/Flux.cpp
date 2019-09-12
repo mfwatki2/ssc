@@ -2890,8 +2890,10 @@ void Flux::imageSizeAimPoint(Heliostat &H, SolarField &SF, double args[], bool i
 		stretch_factor = Toolbox::dotprod(r_to_h, *NV.vect());
 
 		//Stretch the major vertical axis of the ellipse
-		imsizey = sigy*args[1]/stretch_factor;	
-		imsizex = sigx*args[0];
+		/*imsizey = sigy*args[1]/stretch_factor;	
+		imsizex = sigx*args[0];*/
+		imsizey = sigy / stretch_factor;
+		imsizex = sigx;
 
 		/* 
 		Calculate the reduced aiming window based on the image size. The window defines the range of nodes that are 
@@ -2903,7 +2905,7 @@ void Flux::imageSizeAimPoint(Heliostat &H, SolarField &SF, double args[], bool i
 
 		if(nfy > 1){
 			//jstart = (int)ceil(imsizey/dy);
-			jstart = (int)ceil(e_bound_box[3]/dy);
+			jstart = (int)ceil(e_bound_box[3]*args[0]/dy); // Apply the image offset factors to the bounding box of the rotated ellipse. args[0] corresponds to the y-direction
 			jend = nfy - jstart;
 			if(jstart > jend-1){
 				jstart = nfy/2-1;
@@ -2915,7 +2917,7 @@ void Flux::imageSizeAimPoint(Heliostat &H, SolarField &SF, double args[], bool i
 			jend = 1;
 		}
 		//istart = (int)ceil(imsizex/dx);
-		istart = (int)ceil(e_bound_box[1]/dx);
+		istart = (int)ceil(e_bound_box[1]*args[1]/dx); // Apply the image offset factors to the bounding box of the rotated ellipse. args[1] corresponds to the x-direction
 		iend = nfx - istart;
 		if(nfx > 1){
 			isave = istart;
