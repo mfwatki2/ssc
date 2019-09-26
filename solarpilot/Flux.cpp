@@ -2939,6 +2939,91 @@ void Flux::imageSizeAimPoint(Heliostat &H, SolarField &SF, double args[], bool i
         double juserflux_s = (double)nuserflux_y / (double)nfy;
         bool is_user_flux_profile = rec->getVarMap()->flux_profile_type.mapval() == var_receiver::FLUX_PROFILE_TYPE::USER;
 
+		// For debugging
+		double fdata[7][7];
+
+		for (int i = 0; i < nfx; i++) {
+			for (int j = 0; j < nfy; j++) {
+				fdata[j][i] = FG->at(i).at(j).flux;
+			}
+		}
+
+		double fdiff_frac2[7][7];
+		for (int i = 0; i < nfx; i++)
+		{
+			int iuserflux = (int)(i*iuserflux_s);
+
+			for (int j = 0; j < nfy; j++)
+			{
+				int juserflux = nuserflux_y - (int)(j*juserflux_s) - 1;
+
+				double fdiff = FG->at(i).at(j).flux;
+				if (is_user_flux_profile)
+				{
+					double fdiff_denom = totflux * ufp->at(juserflux, iuserflux);
+					if (fdiff_denom > 0.)
+						fdiff_frac2[j][i] = fdiff / fdiff_denom;
+				}
+			}
+		}
+
+		vector<vector<double>> fdiff_frac(nfx, vector<double>(nfy));
+		int NumSavePoints = 3;
+		vector<vector<double> > savepts(NumSavePoints, vector<double>(3, 9.e9));
+		for (int i = istart; i < iend; i++)
+		{
+			int iuserflux = (int)(i*iuserflux_s);
+
+			for (int j = jstart; j < jend; j++)
+			{
+				int juserflux = nuserflux_y - (int)(j*juserflux_s) - 1;
+
+				double fdiff = FG->at(i).at(j).flux;
+				if (is_user_flux_profile)
+				{
+					double fdiff_denom = totflux * ufp->at(juserflux, iuserflux);
+					if (fdiff_denom > 0.)
+						fdiff_frac.at(i).at(j) = fdiff / fdiff_denom;
+				}
+
+
+				for (int pt = 0; pt < NumSavePoints; pt++) {
+					if (fdiff_frac.at(i).at(j) < savepts.at(pt).at(2)) {
+						savepts.insert(savepts.begin() + pt, vector<double>{(double)i, (double)j, fdiff_frac.at(i).at(j)});
+						savepts.pop_back();
+						break;
+					}
+				}
+			}
+		}
+
+		// Find neighboring points and average
+		fsave = 9.e9;
+		for (int pt = 0; pt < NumSavePoints; pt++) {
+			double ftemp = 0;
+			int countT = 0;
+
+			int ival_min = savepts.at(pt).at(0) - 1 < istart ? istart : savepts.at(pt).at(0) - 1;
+			int ival_max = savepts.at(pt).at(0) + 1 > iend - 1 ? iend - 1 : savepts.at(pt).at(0) + 1;
+			int jval_min = savepts.at(pt).at(1) - 1 < jstart ? jstart : savepts.at(pt).at(1) - 1;
+			int jval_max = savepts.at(pt).at(1) + 1 > jend - 1 ? jend - 1 : savepts.at(pt).at(1) + 1;
+
+			for (int i = ival_min; i < ival_max + 1; i++) {
+				for (int j = jval_min; j < jval_max + 1; j++) {
+					ftemp += fdiff_frac.at(i).at(j);
+					countT += 1;
+				}
+			}
+
+			if (ftemp / countT < fsave) {
+				fsave = ftemp / countT;
+				isave = savepts.at(pt).at(0);
+				jsave = savepts.at(pt).at(1);
+			}
+
+		}
+		/*
+		// ORIGINAL CODE STARTS HERE
 		fsave = 9.e9;
 		for(int i=istart; i<iend; i++)
         {
@@ -2964,7 +3049,7 @@ void Flux::imageSizeAimPoint(Heliostat &H, SolarField &SF, double args[], bool i
 				}
 			}
 		}
-
+		*/
 		Fp = &FG->at(isave).at(jsave);
 		
 		//-- now calculate the aim point position in the flux plane
