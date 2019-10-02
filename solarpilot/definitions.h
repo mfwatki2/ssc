@@ -490,6 +490,7 @@ struct var_solarfield : public _vartable_base
 	spout< WeatherData > sim_step_data; 		//[none] Data used for design simulations
 	spout< double > sun_az_des; 		//[deg] Calculated design-point solar azimuth
 	spout< double > sun_el_des; 		//[deg] Calculated design-point solar elevation
+	spvar< bool > enable_all_helios; 		//[none] Specify whether all heliostats should be enabled
 
     void addptrs(unordered_map<std::string, spbase*> &pmap);
 };

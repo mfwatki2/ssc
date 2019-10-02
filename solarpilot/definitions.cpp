@@ -310,6 +310,7 @@ void var_map::reset()
 	sf.sim_step_data                 .setup("solarfield.0.sim_step_data"       , SP_DATTYPE::SP_WEATHERDATA,                             "none",    false,         "",    "",    false,       "Data used for design simulations", "Data used for design simulations");
 	sf.sun_az_des                    .setup("solarfield.0.sun_az_des"          , SP_DATTYPE::SP_DOUBLE    ,                              "deg",    false,         "",    "",    false,  "Calculated design-point solar azimuth", "Calculated design-point solar azimuth");
 	sf.sun_el_des                    .setup("solarfield.0.sun_el_des"          , SP_DATTYPE::SP_DOUBLE    ,                              "deg",    false,         "",    "",    false, "Calculated design-point solar elevation", "Calculated design-point solar elevation");
+	sf.enable_all_helios			 .set("solarfield.0.enable_all_helios"   , SP_DATTYPE::SP_BOOL      ,               "TRUE",           "",     true,  "checkbox",   "",    false,     "Enable all heliostats", "Specify whether all heliostats should be enabled");
 
 	amb.addptrs( _varptrs );
 	fin.addptrs( _varptrs );
@@ -839,6 +840,7 @@ void var_solarfield::addptrs(unordered_map<std::string, spbase*> &pmap)
 	_local_varptrs["solarfield.0.sim_step_data"] = &sim_step_data;
 	_local_varptrs["solarfield.0.sun_az_des"] = &sun_az_des;
 	_local_varptrs["solarfield.0.sun_el_des"] = &sun_el_des;
+	_local_varptrs["solarfield.0.enable_all_helios"] = &enable_all_helios;
 
 	for (unordered_map<std::string, spbase*>::iterator it = _local_varptrs.begin(); it != _local_varptrs.end(); it++)
 		pmap[it->first] = it->second;
