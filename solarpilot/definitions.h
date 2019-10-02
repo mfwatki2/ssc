@@ -212,6 +212,8 @@ struct var_fluxsim : public _vartable_base
 	spvar< int > y_res; 		//[none] Number of flux test points per panel (maximum) in the horizontal direction for the flux simulation
 	spout< double > flux_solar_az; 		//[deg] Solar azimuth angle to use for the flux simulation
 	spout< double > flux_solar_el; 		//[deg] Solar elevation angle to use for the flux simulation
+	spvar< std::string > multi_rec_perf_type; 		//[] Constraint to be applied during multi-receiver performance simulation
+	struct MULTI_REC_PERF_TYPE { enum EN { SPECIFIED_FRACTIONS = 0, NO_CONSTRAINT = 1, LESS_THAN_DP = 2 }; };
 
     void addptrs(unordered_map<std::string, spbase*> &pmap);
 };

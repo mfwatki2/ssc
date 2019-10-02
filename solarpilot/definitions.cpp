@@ -205,6 +205,7 @@ void var_map::reset()
 	flux.y_res                       .set("fluxsim.0.y_res"                  , SP_DATTYPE::SP_INT       ,                 "25",       "none",    false,         "",    "",    false,        "Flux grid resolution - Vertical", "Number of flux test points per panel (maximum) in the horizontal direction for the flux simulation");
 	flux.flux_solar_az               .setup("fluxsim.0.flux_solar_az"          , SP_DATTYPE::SP_DOUBLE    ,                              "deg",    false,         "",    "",    false,         "Calculated solar azimuth angle", "Solar azimuth angle to use for the flux simulation");
 	flux.flux_solar_el               .setup("fluxsim.0.flux_solar_el"          , SP_DATTYPE::SP_DOUBLE    ,                              "deg",    false,         "",    "",    false,       "Calculated solar elevation angle", "Solar elevation angle to use for the flux simulation");
+	flux.multi_rec_perf_type		 .set("fluxsim.0.multi_rec_perf_type"    , SP_DATTYPE::SP_STRING     ,				   "0",           "",     true,    "combo",   "Specified fractions=0;No constraint=1;Less than DP=2", false, "Multi-receiver performance simulation constraint", "Constraint to be applied during multi-receiver performance simulation");
 
 	land.class_name                  .set("land.0.class_name"                , SP_DATTYPE::SP_STRING    ,               "Land",       "none",    false,         "",    "",    false,                             "Class name", "Class name");
 	land.exclusions                  .set("land.0.exclusions"                , SP_DATTYPE::SP_DVEC_POINT,                   "",           "",    false,         "",    "",    false,                             "exclusions", "Vector of arrays that specify the regions of land to exclude in the heliostat layout");
@@ -574,6 +575,7 @@ void var_fluxsim::addptrs(unordered_map<std::string, spbase*> &pmap)
 	_local_varptrs["fluxsim.0.y_res"] = &y_res;
 	_local_varptrs["fluxsim.0.flux_solar_az"] = &flux_solar_az;
 	_local_varptrs["fluxsim.0.flux_solar_el"] = &flux_solar_el;
+	_local_varptrs["fluxsim.0.multi_rec_perf_type"] = &multi_rec_perf_type;
 
 	for (unordered_map<std::string, spbase*>::iterator it = _local_varptrs.begin(); it != _local_varptrs.end(); it++)
 		pmap[it->first] = it->second;
