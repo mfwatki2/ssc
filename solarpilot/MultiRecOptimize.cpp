@@ -515,6 +515,7 @@ int multi_rec_opt_helper::run(SolarField *SF)
 
         int best_rec = 0;
         double most_rec_power = -1.;
+		int disableFlag = 1;  // Assume heliostat should be disabled until told otherwise
 
         //determine which receiver offers the most power opportunity for this heliostat
         for (int j = 0; j < Nrec; j++)
@@ -527,6 +528,7 @@ int multi_rec_opt_helper::run(SolarField *SF)
                 {
                     h->setPowerToReceiver(h->getPowerToReceiver() + prec);
                     heliostat_set.insert(h);
+					disableFlag = 0;  // Heliostat delivers power - keep enabled!
 
                     if (prec > most_rec_power)
                     {
@@ -537,7 +539,12 @@ int multi_rec_opt_helper::run(SolarField *SF)
             }
         }
         //assign this heliostat to the best receiver
-        h->setWhichReceiver( recs->at(best_rec) );
+		if (disableFlag == 0) {
+			h->setWhichReceiver(recs->at(best_rec));
+		}
+		else {
+			h->IsEnabled(false);
+		}
     }
 
     if (!is_performance)
