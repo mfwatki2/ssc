@@ -320,33 +320,63 @@ int multi_rec_opt_helper::run(SolarField *SF)
     //each receiver must meet a minimum power requirement
     if (is_performance)
     {
-        /* 
-        performance constraint - maintain desired power fractions by setting fractional power
-        for all receivers equal to the first receiver
-        */
-        for (int j = 1; j < Nrec; j++)
-        {
-            //gamma_r is the fraction of power expected to be delivered by receiver 'r'
-            double gamma_0 = SF->getVarMap()->recs.front().q_rec_des.Val() / SF->getVarMap()->sf.q_des.val;
-            //sum all power delivered by receiver 0. do this each time, since row/col values are disturbed when adding constraints
-            for (int i = 0; i < Nh; i++)
-            {
-                int id = helios.at(i)->getId();
-                col[i] = O.column("x", i, 0);
-                row[i] = power_allocs.at(id).at(0) / gamma_0;
-            }
+		int constraint_type = SF->getVarMap()->flux.multi_rec_perf_type.mapval();
 
-            double gamma_r = SF->getVarMap()->recs.at(j).q_rec_des.Val() / SF->getVarMap()->sf.q_des.val;
-            //sum all power delivered by receiver r (r>=1).
-            for (int i = 0; i < Nh; i++)
-            {
-                int id = helios.at(i)->getId();
-                col[Nh + i] = O.column("x", i, j);
-                row[Nh + i] = -power_allocs.at(id).at(j) / gamma_r;
-            }
-            //the constraint means sum of power from receiver 0 minus sum of power from receiver 'r' equals zero when scaled by their power fractions.
-            add_constraintex(lp, Nh*2, row, col, EQ, 0.);
-        }
+		switch (constraint_type)
+		{
+		case var_fluxsim::MULTI_REC_PERF_TYPE::SPECIFIED_FRACTIONS:
+			/*
+			performance constraint - maintain desired power fractions by setting fractional power
+			for all receivers equal to the first receiver
+			*/
+			for (int j = 1; j < Nrec; j++)
+			{
+				//gamma_r is the fraction of power expected to be delivered by receiver 'r'
+				double gamma_0 = SF->getVarMap()->recs.front().q_rec_des.Val() / SF->getVarMap()->sf.q_des.val;
+				//sum all power delivered by receiver 0. do this each time, since row/col values are disturbed when adding constraints
+				for (int i = 0; i < Nh; i++)
+				{
+					int id = helios.at(i)->getId();
+					col[i] = O.column("x", i, 0);
+					row[i] = power_allocs.at(id).at(0) / gamma_0;
+				}
+
+				double gamma_r = SF->getVarMap()->recs.at(j).q_rec_des.Val() / SF->getVarMap()->sf.q_des.val;
+				//sum all power delivered by receiver r (r>=1).
+				for (int i = 0; i < Nh; i++)
+				{
+					int id = helios.at(i)->getId();
+					col[Nh + i] = O.column("x", i, j);
+					row[Nh + i] = -power_allocs.at(id).at(j) / gamma_r;
+				}
+				//the constraint means sum of power from receiver 0 minus sum of power from receiver 'r' equals zero when scaled by their power fractions.
+				add_constraintex(lp, Nh * 2, row, col, EQ, 0.);
+			}
+			break;
+		case var_fluxsim::MULTI_REC_PERF_TYPE::NO_CONSTRAINT:
+			// No constraint on desired power for each receiver. Therefore, no constraint needs to be added here
+			break;
+		case var_fluxsim::MULTI_REC_PERF_TYPE::LESS_THAN_DP:
+			/*
+			performance constraint - ensure that no receiver collects more power than the design point amount,
+			which is determined based on power fractions and the design point power condition
+			*/
+			for (int j = 0; j < Nrec; j++)
+			{
+				for (int i = 0; i < Nh; i++)
+				{
+					//int id = helios.at(i)->getId();
+					//col[Nh + i] = O.column("x", i, j);
+					//row[Nh + i] = -power_allocs.at(id).at(j) / gamma_r;
+
+					int id = helios.at(i)->getId();
+					col[i] = O.column("x", i, j);
+					row[i] = power_allocs[id].at(j);
+				}
+				add_constraintex(lp, Nh, row, col, LE, rec_design_power.at(j)); // Uses simple aim points!
+			}
+			break;
+		}
     }
     else
     {   //design constraint - achieve receiver design powers
