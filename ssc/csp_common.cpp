@@ -291,7 +291,8 @@ bool solarpilot_invoke::run(std::shared_ptr<weather_data_provider> wdata)
                 stepsize.at(1) = recs.front().rec_height.val*opt.max_step.val;
                 stepsize.at(2) = recs.front().rec_diameter.val*opt.max_step.val;
 
-                if(! m_sapi->Optimize(opt.algorithm.mapval(), optvars, upper, lower, stepsize, &names) )
+                //if(! m_sapi->Optimize(opt.algorithm.mapval(), optvars, upper, lower, stepsize, &names) )
+				if (!m_sapi->Optimize(optvars, upper, lower, stepsize, &names))
                     return false;
             }
 
