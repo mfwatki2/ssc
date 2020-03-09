@@ -428,6 +428,8 @@ struct var_receiver : public _vartable_base
 	spout< double > rec_offset_z_global; 		//[m] Offset of the receiver center in the vertical direction, positive upwards
 	spout< double > therm_eff; 		//[none] Receiver calculated thermal efficiency
 	spout< double > therm_loss; 		//[MW] Receiver thermal loss at design
+	spvar< double > sigma_limit_x_mod; 		//[] Minimum distance (std. dev.) between optical center of heliostat image and the receiver edge in the receiver-X direction
+	spvar< double > sigma_limit_y_mod; 		//[] Minimum distance (std. dev.) between optical center of heliostat image and the receiver edge in the receiver-Y direction
 
     void addptrs(unordered_map<std::string, spbase*> &pmap);
 };

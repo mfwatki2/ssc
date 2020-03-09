@@ -451,6 +451,8 @@ void var_map::add_receiver(int id)
 	recs.back().rec_offset_z_global  .setup("receiver."+sid+".rec_offset_z_global", SP_DATTYPE::SP_DOUBLE    ,                                "m",    false,         "",    "",    false, "Receiver global positioning offset - Z axis", "Offset of the receiver center in the vertical direction, positive upwards");
 	recs.back().therm_eff            .setup("receiver."+sid+".therm_eff"       , SP_DATTYPE::SP_DOUBLE    ,                             "none",    false,         "",    "",    false, "Receiver calculated thermal efficiency", "Receiver calculated thermal efficiency");
 	recs.back().therm_loss           .setup("receiver."+sid+".therm_loss"      , SP_DATTYPE::SP_DOUBLE    ,                               "MW",    false,         "",    "",    false,              "Design-point thermal loss", "Receiver thermal loss at design");
+	recs.back().sigma_limit_x_mod	 .set("receiver." + sid + ".sigma_limit_x_mod", SP_DATTYPE::SP_DOUBLE,				"2",			 "",		true,		  "",      "",  false,    "Min. image offset from receiver edge - X", "Minimum distance (std. dev.) between optical center of heliostat image and the receiver edge in the receiver-X direction");
+	recs.back().sigma_limit_y_mod	 .set("receiver." + sid + ".sigma_limit_y_mod", SP_DATTYPE::SP_DOUBLE,			    "2",			 "",		true,		  "",      "",  false,    "Min. image offset from receiver edge - Y", "Minimum distance (std. dev.) between optical center of heliostat image and the receiver edge in the receiver-Y direction");
 
 	recs.back().id.val = id;
 	recs.back().addptrs( _varptrs );
@@ -784,6 +786,8 @@ void var_receiver::addptrs(unordered_map<std::string, spbase*> &pmap)
 	_local_varptrs["receiver."+sid+".rec_offset_z_global"] = &rec_offset_z_global;
 	_local_varptrs["receiver."+sid+".therm_eff"] = &therm_eff;
 	_local_varptrs["receiver."+sid+".therm_loss"] = &therm_loss;
+	_local_varptrs["receiver."+sid+".sigma_limit_x_mod"] = &sigma_limit_x_mod;
+	_local_varptrs["receiver."+sid+".sigma_limit_y_mod"] = &sigma_limit_y_mod;
 
 	for (unordered_map<std::string, spbase*>::iterator it = _local_varptrs.begin(); it != _local_varptrs.end(); it++)
 		pmap[it->first] = it->second;
